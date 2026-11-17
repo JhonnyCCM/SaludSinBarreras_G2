@@ -1,0 +1,167 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="Inicio y Panel Accesible"
+  description="Panel principal de SaludSinBarreras con perfiles de prueba WCAG 2.2, acceso directo a formularios y Harness de IA No Conversacional."
+>
+  <section class="card mb-3">
+    <div class="flex-wrap" style="justify-content: space-between; align-items: flex-start;">
+      <div style="max-width: 72ch;">
+        <span class="badge badge-info mb-1">Evaluación Prototipo · Jueves 19/11/2026</span>
+        <h1>Telemedicina inclusiva sin barreras de comunicación</h1>
+        <p>
+          <strong>SaludSinBarreras</strong> adapta la experiencia médica digital para personas con
+          discapacidad auditiva, visual, motriz, cognitiva o del habla conforme a <strong>WCAG 2.2</strong>
+          y un <strong>Harness de IA No Conversacional</strong> que apoya sin diagnosticar ni prescribir.
+        </p>
+      </div>
+      <div class="flex-wrap">
+        <a href="/registro-paciente" class="btn btn-primary">
+          📝 Registrar Paciente con Discapacidad
+        </a>
+        <a href="/usuarios-registrados" class="btn btn-secondary">
+          👥 Ver Usuarios Registrados
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Selector rápido de perfil de prueba (1 clic) -->
+  <section class="card mb-3" aria-labelledby="titulo-perfiles-rapidos">
+    <h2 id="titulo-perfiles-rapidos">1. Simulador rápido de accesibilidad por usuario registrado</h2>
+    <p class="form-hint">
+      Selecciona cualquiera de los pacientes registrados para aplicar al instante sus ajustes visuales,
+      auditivos, motrices o de Lectura Fácil en todo el sistema (1 clic).
+    </p>
+    <div id="quick-profiles-grid" class="grid-auto mt-2" aria-live="polite">
+      <p class="form-hint">Cargando usuarios registrados...</p>
+    </div>
+  </section>
+
+  <!-- Accesos directos a módulos (<= 1 clic) -->
+  <section class="mb-3" aria-labelledby="titulo-modulos">
+    <h2 id="titulo-modulos">2. Módulos funcionales y formularios del prototipo</h2>
+    <div class="grid-auto mt-2">
+      <article class="card">
+        <span class="badge badge-info mb-1">T1-U1 · RF-01 · F4</span>
+        <h3>Formulario de Registro y Preferencias</h3>
+        <p>
+          Flujo en 4 pasos sin límite de tiempo: datos personales, tipo de discapacidad con pictogramas,
+          apoyos requeridos (subtítulos, LSEc, TTS) y confirmación explícita.
+        </p>
+        <a href="/registro-paciente" class="btn btn-primary mt-1">Ir al formulario</a>
+      </article>
+
+      <article class="card">
+        <span class="badge badge-info mb-1">T2-U2 · RF-08 · RF-09 · RF-11</span>
+        <h3>Usuarios Registrados, Médicos e Intérpretes</h3>
+        <p>
+          Consulta fichas clínicas de accesibilidad generadas automáticamente, configura horarios médicos
+          con +15 min de holgura para LSEc y gestiona solicitudes de intérpretes.
+        </p>
+        <a href="/usuarios-registrados" class="btn btn-primary mt-1">Abrir directorio y agenda</a>
+      </article>
+
+      <article class="card">
+        <span class="badge badge-warning mb-1">RF-05 · RF-07 · RF-10 · RNFU-05</span>
+        <h3>Harness de IA No Conversacional</h3>
+        <p>
+          Pipeline determinista sin chat abierto: organiza preguntas del paciente, genera borradores en
+          Lectura Fácil con pictogramas y bloquea el envío hasta firma médica.
+        </p>
+        <a href="/ia-harness" class="btn btn-primary mt-1">Probar Harness IA</a>
+      </article>
+    </div>
+  </section>
+
+  <!-- Resumen de cumplimiento WCAG 2.2 (F3 y F4) -->
+  <section class="card" aria-labelledby="titulo-wcag">
+    <h2 id="titulo-wcag">3. Cobertura WCAG 2.2 implementada (Formatos F3 y F4)</h2>
+    <div class="grid-2 mt-2">
+      <div>
+        <h3>Menú Transversal (F3)</h3>
+        <ul>
+          <li><strong>Visual:</strong> Contraste AA (&ge; 4.5:1), escala de texto hasta 200%, Alto Contraste Negro/Amarillo y Escala de Grises.</li>
+          <li><strong>Voz (TTS):</strong> Lectura integrada de página y lectura automática al enfocar campos por teclado (<kbd>Tab</kbd>).</li>
+          <li><strong>Auditiva:</strong> Preferencia de subtítulos en directo y alertas luminosas/vibratorias en pantalla.</li>
+          <li><strong>Motriz y Cognitiva:</strong> Navegación 100% por teclado, sin trampas de foco (<kbd>Esc</kbd>), foco destacado y botones &ge; 44&times;44 px.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Diseño de Formularios e IA Segura (F4)</h3>
+        <ul>
+          <li><strong>Criterios 3.3.1 y 3.3.3:</strong> Validación accesible con <code>aria-invalid</code>, <code>aria-describedby</code> y sugerencias concretas de corrección.</li>
+          <li><strong>Criterio 3.3.4:</strong> Paso obligatorio de revisión y confirmación explícita antes de guardar datos clínicos o enviar indicaciones.</li>
+          <li><strong>Criterio 2.2.1:</strong> Formularios sin expiración automática de sesión.</li>
+          <li><strong>Guardrails IA:</strong> Bloqueo estricto de chat multi-turno y prohibición de diagnóstico o prescripción autónoma.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  import { applyAccessibilityState, loadAccessibilityState, triggerVisualAlert } from '../lib/accessibility';
+  import { DISABILITY_LABELS, getPatients, type RegisteredPatient } from '../lib/store';
+
+  const container = document.getElementById('quick-profiles-grid');
+
+  function applyPatientPreset(patient: RegisteredPatient) {
+    const preset = patient.aiAccessibilityBrief.appliedInterfacePreset;
+    const current = loadAccessibilityState();
+    applyAccessibilityState({
+      ...current,
+      fontScale: preset.fontScale,
+      contrast: preset.contrast,
+      ttsFocusAuto: preset.ttsAuto,
+      easyRead: preset.easyRead,
+      subtitlesDefault: preset.subtitlesDefault,
+      visualAlerts: preset.visualAlerts,
+      focusEnhanced: patient.disabilities.includes('motriz') || current.focusEnhanced,
+    });
+    triggerVisualAlert(
+      `Perfil de accesibilidad aplicado para ${patient.fullName}: texto ${Math.round(preset.fontScale * 100)}%, contraste ${preset.contrast}.`,
+      { speak: preset.ttsAuto }
+    );
+  }
+
+  function renderQuickProfiles() {
+    if (!container) return;
+    const patients = getPatients();
+    container.innerHTML = '';
+
+    patients.forEach((patient) => {
+      const card = document.createElement('article');
+      card.className = 'card';
+      card.style.background = 'var(--bg)';
+
+      const tags = patient.disabilities
+        .map((d) => DISABILITY_LABELS[d].split(' ')[0])
+        .join(' · ');
+
+      card.innerHTML = `
+        <div class="flex-wrap" style="justify-content: space-between;">
+          <strong>${patient.fullName}</strong>
+          <span class="badge badge-info">${patient.age} años</span>
+        </div>
+        <p class="form-hint mt-1" style="margin-bottom: 0.5rem;">
+          Discapacidad: <strong>${tags}</strong><br />
+          Apoyo principal: ${patient.aiAccessibilityBrief.mandatorySupports[0] || 'Accesibilidad estándar'}
+        </p>
+      `;
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-secondary';
+      btn.textContent = '♿ Aplicar su configuración ahora';
+      btn.addEventListener('click', () => applyPatientPreset(patient));
+
+      card.appendChild(btn);
+      container.appendChild(card);
+    });
+  }
+
+  renderQuickProfiles();
+</script>

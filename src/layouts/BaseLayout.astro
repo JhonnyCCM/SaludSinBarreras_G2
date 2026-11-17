@@ -1,0 +1,115 @@
+---
+import AccessibilityMenu from '../components/AccessibilityMenu.astro';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const {
+  title,
+  description = 'Plataforma de telemedicina accesible con enfoque WCAG 2.2 y Harness de IA No Conversacional.',
+} = Astro.props;
+
+const pathname = Astro.url.pathname;
+const isCurrent = (target: string) =>
+  pathname === target || (target !== '/' && pathname.startsWith(target));
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <title>{title} | SaludSinBarreras</title>
+    <!-- Inicialización instantánea de preferencias WCAG 2.2 para evitar parpadeo visual -->
+    <script is:inline>
+      (function () {
+        try {
+          var raw = localStorage.getItem('ssb_a11y_prefs_v1');
+          if (!raw) return;
+          var prefs = JSON.parse(raw);
+          var root = document.documentElement;
+          if (prefs.fontScale) root.style.setProperty('--a11y-font-scale', String(prefs.fontScale));
+          if (prefs.contrast) root.setAttribute('data-contrast', prefs.contrast);
+          if (prefs.focusEnhanced) root.setAttribute('data-focus', 'enhanced');
+          if (prefs.easyRead) root.setAttribute('data-easy-read', 'true');
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#contenido-principal">Saltar al contenido principal</a>
+
+    <header class="site-header">
+      <AccessibilityMenu />
+
+      <div class="container">
+        <div class="brand-bar">
+          <a href="/" class="brand-logo">
+            <span class="brand-badge" aria-hidden="true">SB</span>
+            <span>
+              <span class="brand-title">SaludSinBarreras</span>
+              <span class="brand-subtitle">Telemedicina Inclusiva · WCAG 2.2 · IA No Conversacional</span>
+            </span>
+          </a>
+
+          <div class="flex-wrap">
+            <span class="badge badge-success">Prototipo Evaluación 19/11/2026</span>
+          </div>
+        </div>
+
+        <nav class="main-nav" aria-label="Navegación principal">
+          <a
+            href="/"
+            class="nav-link"
+            aria-current={isCurrent('/') ? 'page' : undefined}
+          >
+            🏠 Inicio
+          </a>
+          <a
+            href="/registro-paciente"
+            class="nav-link"
+            aria-current={isCurrent('/registro-paciente') ? 'page' : undefined}
+          >
+            📝 Registro Discapacidad (RF-01)
+          </a>
+          <a
+            href="/usuarios-registrados"
+            class="nav-link"
+            aria-current={isCurrent('/usuarios-registrados') ? 'page' : undefined}
+          >
+            👥 Usuarios Registrados y Apoyos (RF-09)
+          </a>
+          <a
+            href="/ia-harness"
+            class="nav-link"
+            aria-current={isCurrent('/ia-harness') ? 'page' : undefined}
+          >
+            ⚙️ Harness IA No Conversacional (RF-10)
+          </a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="contenido-principal" tabindex="-1">
+      <div class="container">
+        <slot />
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container flex-wrap" style="justify-content: space-between;">
+        <div>
+          <strong>SaludSinBarreras — Grupo 5 (ULEAM · Usabilidad y Accesibilidad 6A)</strong><br />
+          Integrantes: Elkin Delgado (Líder/Dev) · Jork Lucas (Analista) · Jhonny Castillo (QA/Dev Apoyo)
+        </div>
+        <div>
+          Componente IA estrictamente no conversacional: no diagnostica ni prescribe; requiere validación profesional (RF-10).
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

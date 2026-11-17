@@ -1,0 +1,542 @@
+---
+// Menú de Accesibilidad Transversal WCAG 2.2 (F3-Menu-accesibilidad)
+---
+
+<section class="a11y-wrapper" aria-label="Barra y menú de accesibilidad WCAG 2.2">
+  <div class="a11y-topbar">
+    <div class="container a11y-topbar-inner">
+      <div class="a11y-status-group">
+        <span class="badge badge-info">WCAG 2.2 AA/AAA</span>
+        <span class="a11y-quick-info" id="a11y-summary-pill">
+          Texto: <strong id="a11y-pill-scale">100%</strong> · Modo: <strong id="a11y-pill-contrast">Estándar AA</strong>
+        </span>
+      </div>
+
+      <div class="a11y-quick-actions">
+        <button
+          type="button"
+          class="btn btn-secondary a11y-compact-btn"
+          id="a11y-quick-tts"
+          aria-label="Leer contenido principal en voz alta (Alt más L)"
+        >
+          🔊 Leer página (Alt+L)
+        </button>
+        <button
+          type="button"
+          class="btn btn-secondary a11y-compact-btn"
+          id="a11y-quick-stop-tts"
+          aria-label="Detener lectura por voz"
+        >
+          ⏹ Detener voz
+        </button>
+        <button
+          type="button"
+          class="btn btn-primary"
+          id="a11y-toggle-btn"
+          aria-expanded="false"
+          aria-controls="a11y-panel"
+        >
+          ♿ Menú de Accesibilidad (Alt+A)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Región de alertas visuales y lectores de pantalla (Criterio 1.4.1 / 4.1.3) -->
+  <div class="container">
+    <div
+      id="ssb-visual-alert-banner"
+      class="a11y-live-banner"
+      role="status"
+      aria-live="polite"
+      hidden
+    >
+      <span class="a11y-alert-dot" aria-hidden="true">🔔</span>
+      <span id="ssb-visual-alert-text"></span>
+      <button
+        type="button"
+        class="btn btn-secondary a11y-close-alert"
+        id="ssb-close-alert-btn"
+        aria-label="Cerrar aviso visual"
+      >
+        Cerrar
+      </button>
+    </div>
+  </div>
+
+  <!-- Panel desplegable completo (Criterios F3 Visual, Auditiva, Motriz, Cognitiva) -->
+  <div
+    id="a11y-panel"
+    class="a11y-panel"
+    role="region"
+    aria-label="Opciones de accesibilidad del sistema"
+    hidden
+  >
+    <div class="container">
+      <div class="a11y-panel-header">
+        <div>
+          <h2 class="a11y-panel-title">Menú de Accesibilidad Universal (WCAG 2.2 — F3)</h2>
+          <p class="form-hint" style="margin: 0;">
+            Ajustes guardados automáticamente en tu dispositivo. Pulsa <kbd>Escape</kbd> para cerrar sin perder tu posición.
+          </p>
+        </div>
+        <div class="flex-wrap">
+          <button type="button" class="btn btn-secondary" id="a11y-reset-btn">
+            ↺ Restablecer accesibilidad
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            id="a11y-close-btn"
+            aria-label="Cerrar menú de accesibilidad"
+          >
+            ✕ Cerrar (Esc)
+          </button>
+        </div>
+      </div>
+
+      <div class="a11y-grid">
+        <!-- Categoría Visual -->
+        <fieldset class="a11y-fieldset">
+          <legend>👁️ Categoría Visual (Perceptible)</legend>
+
+          <div class="a11y-control-block">
+            <span class="form-label">Tamaño de texto (hasta 200% — Criterio 1.4.4):</span>
+            <div class="flex-wrap mt-1" role="group" aria-label="Ajuste de tamaño de texto">
+              <button type="button" class="btn btn-secondary" data-font-step="-0.25" aria-label="Reducir texto">A-</button>
+              <button type="button" class="btn btn-secondary" data-font-set="1">100%</button>
+              <button type="button" class="btn btn-secondary" data-font-set="1.25">125%</button>
+              <button type="button" class="btn btn-secondary" data-font-set="1.5">150%</button>
+              <button type="button" class="btn btn-secondary" data-font-set="1.75">175%</button>
+              <button type="button" class="btn btn-secondary" data-font-set="2">200%</button>
+              <button type="button" class="btn btn-secondary" data-font-step="0.25" aria-label="Aumentar texto">A+</button>
+            </div>
+          </div>
+
+          <div class="a11y-control-block mt-2">
+            <span class="form-label">Contraste y color (Criterios 1.4.3 y 1.4.11):</span>
+            <div class="flex-wrap mt-1" role="group" aria-label="Modos de contraste">
+              <button type="button" class="btn btn-secondary" data-contrast-mode="standard">Estándar AA (4.5:1)</button>
+              <button type="button" class="btn btn-secondary" data-contrast-mode="high">Alto Contraste (Negro/Amarillo)</button>
+              <button type="button" class="btn btn-secondary" data-contrast-mode="grayscale">Escala de Grises</button>
+            </div>
+          </div>
+        </fieldset>
+
+        <!-- Categoría Visual / Auditiva: Texto a Voz y Alertas -->
+        <fieldset class="a11y-fieldset">
+          <legend>🔊 Voz (TTS) y Apoyo Auditivo</legend>
+
+          <div class="flex-wrap mb-1">
+            <button type="button" class="btn btn-accent" id="a11y-panel-tts-read">
+              🔊 Leer página / formulario
+            </button>
+            <button type="button" class="btn btn-secondary" id="a11y-panel-tts-stop">
+              ⏹ Detener lectura
+            </button>
+          </div>
+
+          <label class="check-card mt-1">
+            <input type="checkbox" id="a11y-chk-tts-focus" />
+            <span class="check-card-body">
+              <strong>Leer campos automáticamente al enfocar con Tab</strong>
+              <span class="form-hint">Reproduce la etiqueta del campo al navegar por teclado (Criterios 1.1.1 / 1.3.1).</span>
+            </span>
+          </label>
+
+          <label class="check-card mt-1">
+            <input type="checkbox" id="a11y-chk-subtitles" />
+            <span class="check-card-body">
+              <strong>Subtítulos automáticos por defecto (Criterio 1.2.4)</strong>
+              <span class="form-hint">Activa subtitulado sincrónico en videoconsultas y formularios de cita.</span>
+            </span>
+          </label>
+
+          <label class="check-card mt-1">
+            <input type="checkbox" id="a11y-chk-visual-alerts" />
+            <span class="check-card-body">
+              <strong>Alertas visuales + vibración en pantalla (Criterio 1.4.1)</strong>
+              <span class="form-hint">Avisos luminosos sin depender del sonido.</span>
+            </span>
+          </label>
+
+          <button type="button" class="btn btn-secondary mt-1" id="a11y-test-visual-alert">
+            🔔 Probar alerta visual / vibración
+          </button>
+        </fieldset>
+
+        <!-- Categoría Motriz y Cognitiva -->
+        <fieldset class="a11y-fieldset">
+          <legend>⌨️ Apoyo Motriz y Cognitivo</legend>
+
+          <label class="check-card">
+            <input type="checkbox" id="a11y-chk-focus" />
+            <span class="check-card-body">
+              <strong>Foco súper destacado (5px — Criterios 2.4.7 y 2.4.11)</strong>
+              <span class="form-hint">Resalta con borde grueso y halo el elemento activo para teclado o pulsadores.</span>
+            </span>
+          </label>
+
+          <label class="check-card mt-1">
+            <input type="checkbox" id="a11y-chk-easy-read" />
+            <span class="check-card-body">
+              <strong>Modo Lectura Fácil y Pictogramas (Criterio 3.1.5)</strong>
+              <span class="form-hint">Mayor interlineado y apoyo visual en indicaciones médicas y formularios.</span>
+            </span>
+          </label>
+
+          <div class="alert-box success mt-2" style="padding: 0.75rem;">
+            <strong>⏱️ Sesión sin límite de tiempo (Criterio 2.2.1):</strong>
+            Los formularios no caducan ni borran tu progreso automáticamente.
+          </div>
+
+          <div class="a11y-shortcuts mt-2">
+            <strong>Atajos de teclado (Criterios 2.1.1 y 2.1.2):</strong>
+            <ul>
+              <li><kbd>Tab</kbd> / <kbd>Shift+Tab</kbd>: Moverse entre controles (&ge; 44&times;44 px)</li>
+              <li><kbd>Enter</kbd> / <kbd>Espacio</kbd>: Activar botón o casilla</li>
+              <li><kbd>Alt</kbd> + <kbd>A</kbd>: Abrir o cerrar Menú de Accesibilidad</li>
+              <li><kbd>Alt</kbd> + <kbd>L</kbd>: Leer contenido principal por voz</li>
+              <li><kbd>Esc</kbd>: Salir de menús sin trampas de foco</li>
+            </ul>
+          </div>
+        </fieldset>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .a11y-topbar {
+    background: var(--surface-alt);
+    border-bottom: 2px solid var(--border);
+    padding-block: 0.55rem;
+  }
+
+  .a11y-topbar-inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .a11y-status-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .a11y-quick-info {
+    font-size: 0.9rem;
+    color: var(--text);
+  }
+
+  .a11y-quick-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .a11y-compact-btn {
+    padding: 0.45rem 0.8rem;
+    font-size: 0.92rem;
+  }
+
+  .a11y-panel {
+    background: var(--surface);
+    border-bottom: 3px solid var(--primary);
+    padding-block: 1.25rem;
+    box-shadow: var(--shadow);
+  }
+
+  .a11y-panel-header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .a11y-panel-title {
+    font-size: 1.15rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .a11y-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr));
+    gap: 1rem;
+  }
+
+  .a11y-fieldset {
+    border: 2px solid var(--border-subtle);
+    border-radius: var(--radius);
+    padding: 1rem;
+    background: var(--bg);
+    margin: 0;
+  }
+
+  .a11y-fieldset legend {
+    font-weight: 800;
+    padding-inline: 0.45rem;
+    color: var(--text);
+  }
+
+  .a11y-shortcuts {
+    font-size: 0.9rem;
+  }
+
+  .a11y-shortcuts ul {
+    margin: 0.35rem 0 0 1.15rem;
+    padding: 0;
+  }
+
+  kbd {
+    display: inline-block;
+    padding: 0.1rem 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    font-family: Consolas, monospace;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+
+  .a11y-live-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+    padding: 0.8rem 1rem;
+    border-radius: var(--radius);
+    border: 2px solid var(--warning-border);
+    background: var(--warning-bg);
+    color: var(--warning-text);
+    font-weight: 700;
+  }
+
+  .a11y-live-banner[hidden],
+  .a11y-panel[hidden] {
+    display: none;
+  }
+
+  .btn[aria-pressed="true"] {
+    background: var(--primary);
+    color: var(--primary-text);
+    border-color: var(--primary);
+  }
+</style>
+
+<script>
+  import {
+    DEFAULT_A11Y_STATE,
+    applyAccessibilityState,
+    clampFontScale,
+    loadAccessibilityState,
+    speakText,
+    stopSpeaking,
+    triggerVisualAlert,
+    type AccessibilityState,
+    type ContrastMode,
+  } from '../lib/accessibility';
+
+  const toggleBtn = document.getElementById('a11y-toggle-btn') as HTMLButtonElement | null;
+  const closeBtn = document.getElementById('a11y-close-btn') as HTMLButtonElement | null;
+  const resetBtn = document.getElementById('a11y-reset-btn') as HTMLButtonElement | null;
+  const panel = document.getElementById('a11y-panel') as HTMLElement | null;
+
+  const pillScale = document.getElementById('a11y-pill-scale');
+  const pillContrast = document.getElementById('a11y-pill-contrast');
+
+  const chkTtsFocus = document.getElementById('a11y-chk-tts-focus') as HTMLInputElement | null;
+  const chkSubtitles = document.getElementById('a11y-chk-subtitles') as HTMLInputElement | null;
+  const chkVisualAlerts = document.getElementById('a11y-chk-visual-alerts') as HTMLInputElement | null;
+  const chkFocus = document.getElementById('a11y-chk-focus') as HTMLInputElement | null;
+  const chkEasyRead = document.getElementById('a11y-chk-easy-read') as HTMLInputElement | null;
+
+  const alertBanner = document.getElementById('ssb-visual-alert-banner');
+  const alertText = document.getElementById('ssb-visual-alert-text');
+  const closeAlertBtn = document.getElementById('ssb-close-alert-btn');
+
+  let currentState: AccessibilityState = applyAccessibilityState(loadAccessibilityState());
+
+  function contrastLabel(mode: ContrastMode): string {
+    if (mode === 'high') return 'Alto Contraste';
+    if (mode === 'grayscale') return 'Escala de Grises';
+    return 'Estándar AA';
+  }
+
+  function syncUI(state: AccessibilityState) {
+    currentState = state;
+    if (pillScale) pillScale.textContent = `${Math.round(state.fontScale * 100)}%`;
+    if (pillContrast) pillContrast.textContent = contrastLabel(state.contrast);
+
+    if (chkTtsFocus) chkTtsFocus.checked = state.ttsFocusAuto;
+    if (chkSubtitles) chkSubtitles.checked = state.subtitlesDefault;
+    if (chkVisualAlerts) chkVisualAlerts.checked = state.visualAlerts;
+    if (chkFocus) chkFocus.checked = state.focusEnhanced;
+    if (chkEasyRead) chkEasyRead.checked = state.easyRead;
+
+    document.querySelectorAll<HTMLButtonElement>('[data-font-set]').forEach((btn) => {
+      const val = Number(btn.dataset.fontSet);
+      btn.setAttribute('aria-pressed', Math.abs(val - state.fontScale) < 0.01 ? 'true' : 'false');
+    });
+
+    document.querySelectorAll<HTMLButtonElement>('[data-contrast-mode]').forEach((btn) => {
+      const mode = btn.dataset.contrastMode as ContrastMode;
+      btn.setAttribute('aria-pressed', mode === state.contrast ? 'true' : 'false');
+    });
+  }
+
+  function setPanelOpen(open: boolean) {
+    if (!panel || !toggleBtn) return;
+    panel.hidden = !open;
+    toggleBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) {
+      closeBtn?.focus();
+    } else {
+      toggleBtn.focus();
+    }
+  }
+
+  function readMainContent() {
+    const main = document.getElementById('contenido-principal');
+    const text = main?.innerText || document.body.innerText;
+    const ok = speakText(text.slice(0, 2500));
+    if (!ok) {
+      triggerVisualAlert('Tu navegador no tiene habilitada la síntesis de voz (Web Speech API).');
+    }
+  }
+
+  syncUI(currentState);
+
+  window.addEventListener('ssb:a11y-changed', (ev) => {
+    const customEv = ev as CustomEvent<AccessibilityState>;
+    syncUI(customEv.detail);
+  });
+
+  window.addEventListener('ssb:visual-alert', (ev) => {
+    const customEv = ev as CustomEvent<{ message: string }>;
+    if (alertBanner && alertText) {
+      alertText.textContent = customEv.detail.message;
+      alertBanner.hidden = false;
+    }
+  });
+
+  closeAlertBtn?.addEventListener('click', () => {
+    if (alertBanner) alertBanner.hidden = true;
+  });
+
+  toggleBtn?.addEventListener('click', () => {
+    const isOpen = panel ? !panel.hidden : false;
+    setPanelOpen(!isOpen);
+  });
+
+  closeBtn?.addEventListener('click', () => setPanelOpen(false));
+
+  resetBtn?.addEventListener('click', () => {
+    stopSpeaking();
+    applyAccessibilityState({ ...DEFAULT_A11Y_STATE });
+    triggerVisualAlert('Configuración de accesibilidad restablecida a valores estándar WCAG 2.2 AA.');
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-font-set]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const nextScale = Number(btn.dataset.fontSet || 1);
+      applyAccessibilityState({ ...currentState, fontScale: nextScale });
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-font-step]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const delta = Number(btn.dataset.fontStep || 0);
+      const nextScale = clampFontScale(currentState.fontScale + delta);
+      applyAccessibilityState({ ...currentState, fontScale: nextScale });
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-contrast-mode]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const mode = (btn.dataset.contrastMode as ContrastMode) || 'standard';
+      applyAccessibilityState({ ...currentState, contrast: mode });
+    });
+  });
+
+  chkTtsFocus?.addEventListener('change', () => {
+    applyAccessibilityState({ ...currentState, ttsFocusAuto: chkTtsFocus.checked });
+    if (chkTtsFocus.checked) {
+      speakText('Lectura automática al enfocar campos activada.');
+    }
+  });
+
+  chkSubtitles?.addEventListener('change', () => {
+    applyAccessibilityState({ ...currentState, subtitlesDefault: chkSubtitles.checked });
+  });
+
+  chkVisualAlerts?.addEventListener('change', () => {
+    applyAccessibilityState({ ...currentState, visualAlerts: chkVisualAlerts.checked });
+  });
+
+  chkFocus?.addEventListener('change', () => {
+    applyAccessibilityState({ ...currentState, focusEnhanced: chkFocus.checked });
+  });
+
+  chkEasyRead?.addEventListener('change', () => {
+    applyAccessibilityState({ ...currentState, easyRead: chkEasyRead.checked });
+  });
+
+  document.getElementById('a11y-quick-tts')?.addEventListener('click', readMainContent);
+  document.getElementById('a11y-panel-tts-read')?.addEventListener('click', readMainContent);
+  document.getElementById('a11y-quick-stop-tts')?.addEventListener('click', stopSpeaking);
+  document.getElementById('a11y-panel-tts-stop')?.addEventListener('click', stopSpeaking);
+
+  document.getElementById('a11y-test-visual-alert')?.addEventListener('click', () => {
+    triggerVisualAlert(
+      'Alerta multimodal de prueba (WCAG 1.4.1): aviso visual luminoso y vibración activos para llamadas o recordatorios.',
+      { vibrate: true, speak: false }
+    );
+  });
+
+  // Lectura de campos al enfocar por teclado cuando ttsFocusAuto está activo
+  document.addEventListener('focusin', (event) => {
+    if (!currentState.ttsFocusAuto) return;
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+
+    const ariaLabel = target.getAttribute('aria-label');
+    const id = target.getAttribute('id');
+    const linkedLabel = id ? document.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent : '';
+    const parentLabel = target.closest('label')?.textContent;
+    const textToSpeak = ariaLabel || linkedLabel || parentLabel || target.textContent || '';
+
+    if (textToSpeak.trim()) {
+      speakText(textToSpeak.trim().slice(0, 180));
+    }
+  });
+
+  // Atajos globales: Esc cierra panel sin trampas de foco, Alt+A abre/cierra menú, Alt+L lee página
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && panel && !panel.hidden) {
+      event.preventDefault();
+      setPanelOpen(false);
+      return;
+    }
+    if (event.altKey && event.key.toLowerCase() === 'a') {
+      event.preventDefault();
+      const isOpen = panel ? !panel.hidden : false;
+      setPanelOpen(!isOpen);
+      return;
+    }
+    if (event.altKey && event.key.toLowerCase() === 'l') {
+      event.preventDefault();
+      readMainContent();
+    }
+  });
+</script>

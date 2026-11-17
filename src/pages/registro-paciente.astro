@@ -1,0 +1,882 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getDisabilityIconSvg } from '../lib/pictograms';
+import type { DisabilityCategory } from '../lib/ai-harness/types';
+
+const disabilityOptions: Array<{
+  value: DisabilityCategory;
+  title: string;
+  desc: string;
+}> = [
+  {
+    value: 'auditiva',
+    title: 'Discapacidad Auditiva',
+    desc: 'Sordera o hipoacusia. Habilita subtítulos en vivo, alertas visuales y opción de intérprete LSEc.',
+  },
+  {
+    value: 'visual',
+    title: 'Discapacidad Visual',
+    desc: 'Ceguera o baja visión. Prioriza lectura por voz (TTS), lector de pantalla, alto contraste y texto grande.',
+  },
+  {
+    value: 'motriz',
+    title: 'Discapacidad Motriz / Física',
+    desc: 'Dificultad de movimiento en manos o brazos. Activa foco destacado y operación completa por teclado o pulsador.',
+  },
+  {
+    value: 'cognitiva',
+    title: 'Discapacidad Cognitiva / Comprensión',
+    desc: 'Apoyo en lectura, memoria o atención. Activa resúmenes en Lectura Fácil con listas cortas y pictogramas.',
+  },
+  {
+    value: 'habla',
+    title: 'Discapacidad del Habla',
+    desc: 'Dificultad para expresarse oralmente. Habilita chat prioritario, turno visual de palabra y comunicador alternativo.',
+  },
+];
+---
+
+<BaseLayout
+  title="Registro de Paciente y Preferencias de Discapacidad"
+  description="Formulario accesible en 4 pasos para registrar usuarios con discapacidad y configurar apoyos de comunicación en telemedicina (RF-01, WCAG 2.2)."
+>
+  <section class="card mb-3">
+    <span class="badge badge-info mb-1">Tarea T1-U1 · Requisito RF-01 · Criterios WCAG 3.3.1, 3.3.3, 3.3.4</span>
+    <h1>Registro de Paciente y Preferencias de Comunicación</h1>
+    <p>
+      Completa estos 4 pasos claros para crear tu ficha de accesibilidad. No hay límite de tiempo y
+      puedes navegar usando únicamente <kbd>Tab</kbd>, <kbd>Enter</kbd> o <kbd>Espacio</kbd>.
+    </p>
+
+    <!-- Indicador de progreso accesible -->
+    <div class="mt-2">
+      <div class="flex-wrap" style="justify-content: space-between;">
+        <strong id="step-progress-label">Paso 1 de 4: Datos personales</strong>
+        <span class="form-hint" id="step-progress-percent">25% completado</span>
+      </div>
+      <div
+        class="progress-track mt-1"
+        role="progressbar"
+        aria-valuemin="1"
+        aria-valuemax="4"
+        aria-valuenow="1"
+        aria-labelledby="step-progress-label"
+        id="wizard-progressbar"
+      >
+        <div class="progress-fill" id="wizard-progress-fill" style="width: 25%;"></div>
+      </div>
+
+      <ol class="step-pills mt-2" aria-label="Pasos del formulario">
+        <li class="step-pill active" data-step-pill="1">1. Datos</li>
+        <li class="step-pill" data-step-pill="2">2. Discapacidad</li>
+        <li class="step-pill" data-step-pill="3">3. Apoyos</li>
+        <li class="step-pill" data-step-pill="4">4. Confirmación</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- Resumen de errores del paso actual -->
+  <div
+    id="wizard-error-summary"
+    class="alert-box danger mb-2"
+    role="alert"
+    tabindex="-1"
+    hidden
+  >
+    <strong>Revisa los campos señalados antes de continuar:</strong>
+    <ul id="wizard-error-list" style="margin: 0.4rem 0 0 1.2rem;"></ul>
+  </div>
+
+  <form id="patient-registration-form" class="card" novalidate>
+    <!-- PASO 1: Datos Personales -->
+    <fieldset class="wizard-step" data-step="1">
+      <legend class="step-legend">Paso 1: Datos personales y contacto</legend>
+
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label" for="reg-fullname">Nombre completo *</label>
+          <input
+            type="text"
+            id="reg-fullname"
+            name="fullName"
+            class="form-control"
+            autocomplete="name"
+            placeholder="Ej.: Juan Carlos Paredes"
+            aria-describedby="hint-fullname err-fullname"
+            required
+          />
+          <span class="form-hint" id="hint-fullname">Escribe al menos nombre y apellido tal como constan en tu cédula.</span>
+          <span class="field-error" id="err-fullname"></span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="reg-cedula">Cédula o Documento de Identidad (10 dígitos) *</label>
+          <input
+            type="text"
+            id="reg-cedula"
+            name="cedula"
+            class="form-control"
+            inputmode="numeric"
+            maxlength="10"
+            placeholder="Ej.: 1312345678"
+            aria-describedby="hint-cedula err-cedula"
+            required
+          />
+          <span class="form-hint" id="hint-cedula">Ingresa solo los 10 números sin guiones ni espacios.</span>
+          <span class="field-error" id="err-cedula"></span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="reg-age">Edad (años) *</label>
+          <input
+            type="number"
+            id="reg-age"
+            name="age"
+            class="form-control"
+            min="1"
+            max="120"
+            placeholder="Ej.: 42"
+            aria-describedby="hint-age err-age"
+            required
+          />
+          <span class="form-hint" id="hint-age">Valor numérico entre 1 y 120 años.</span>
+          <span class="field-error" id="err-age"></span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="reg-phone">Teléfono de contacto *</label>
+          <input
+            type="tel"
+            id="reg-phone"
+            name="phone"
+            class="form-control"
+            autocomplete="tel"
+            placeholder="Ej.: 0991234567"
+            aria-describedby="hint-phone err-phone"
+            required
+          />
+          <span class="form-hint" id="hint-phone">Número móvil o convencional (mínimo 7 dígitos) para avisos de cita.</span>
+          <span class="field-error" id="err-phone"></span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="reg-support">Persona o contacto de apoyo (opcional)</label>
+          <input
+            type="text"
+            id="reg-support"
+            name="supportContact"
+            class="form-control"
+            placeholder="Ej.: María Paredes (Hija) - 0987654321"
+            aria-describedby="hint-support"
+          />
+          <span class="form-hint" id="hint-support">Familiar o cuidador si deseas que reciba recordatorios de respaldo.</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="reg-connectivity">Calidad de internet habitual en casa *</label>
+          <select id="reg-connectivity" name="connectivity" class="form-control" aria-describedby="hint-connectivity">
+            <option value="media">Media (Conexión residencial o datos 4G estables)</option>
+            <option value="baja">Baja (Señal débil — activar prioridad en subtítulos y bajo ancho de banda)</option>
+            <option value="alta">Alta (Fibra óptica / ideal para videoconsulta con intérprete LSEc)</option>
+          </select>
+          <span class="form-hint" id="hint-connectivity">Permite ajustar automáticamente la calidad de video sin perder los subtítulos.</span>
+        </div>
+      </div>
+
+      <div class="wizard-actions">
+        <button type="button" class="btn btn-primary" data-next-step="2">
+          Siguiente: Información de discapacidad →
+        </button>
+      </div>
+    </fieldset>
+
+    <!-- PASO 2: Información de Discapacidad y Tecnologías de Asistencia -->
+    <fieldset class="wizard-step" data-step="2" hidden>
+      <legend class="step-legend">Paso 2: Información de discapacidad y tecnologías de asistencia</legend>
+      <p class="form-hint">
+        Selecciona una o más categorías que describan tus necesidades de accesibilidad:
+      </p>
+
+      <div class="grid-auto mb-2" role="group" aria-label="Categorías de discapacidad">
+        {disabilityOptions.map((opt) => (
+          <label class="check-card disability-card">
+            <input type="checkbox" name="disabilities" value={opt.value} />
+            <span class="check-card-body">
+              <span class="flex-wrap" style="gap: 0.45rem;">
+                <span class="icon-badge" set:html={getDisabilityIconSvg(opt.value)} />
+                <strong>{opt.title}</strong>
+              </span>
+              <span class="form-hint">{opt.desc}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+      <span class="field-error mb-2" id="err-disabilities"></span>
+
+      <div class="form-group mt-2">
+        <label class="form-label" for="reg-details">Detalle funcional o indicaciones específicas *</label>
+        <textarea
+          id="reg-details"
+          name="disabilityDetails"
+          class="form-control"
+          rows="3"
+          placeholder="Ej.: Uso audífono derecho y necesito que el médico hable de frente a la cámara con subtítulos activos."
+          aria-describedby="hint-details err-details"
+          required
+        ></textarea>
+        <span class="form-hint" id="hint-details">Describe brevemente cómo prefieres comunicarte o qué barreras debemos evitar.</span>
+        <span class="field-error" id="err-details"></span>
+      </div>
+
+      <div class="form-group">
+        <span class="form-label">Tecnologías de asistencia que utilizas habitualmente:</span>
+        <div class="grid-auto mt-1" role="group" aria-label="Tecnologías de asistencia">
+          <label class="check-card">
+            <input type="checkbox" name="assistiveTech" value="Lector de pantalla (NVDA / JAWS / TalkBack)" />
+            <span class="check-card-body"><strong>Lector de pantalla</strong><span class="form-hint">NVDA, JAWS, TalkBack o VoiceOver</span></span>
+          </label>
+          <label class="check-card">
+            <input type="checkbox" name="assistiveTech" value="Teclado adaptado / Pulsador" />
+            <span class="check-card-body"><strong>Teclado o Pulsador</strong><span class="form-hint">Navegación sin ratón</span></span>
+          </label>
+          <label class="check-card">
+            <input type="checkbox" name="assistiveTech" value="Audífonos / Implante coclear" />
+            <span class="check-card-body"><strong>Audífonos o Implante</strong><span class="form-hint">Apoyo auditivo personal</span></span>
+          </label>
+          <label class="check-card">
+            <input type="checkbox" name="assistiveTech" value="Lengua de Señas Ecuatoriana (LSEc)" />
+            <span class="check-card-body"><strong>Lengua de Señas (LSEc)</strong><span class="form-hint">Comunicación visogestual</span></span>
+          </label>
+          <label class="check-card">
+            <input type="checkbox" name="assistiveTech" value="Comunicador alternativo / Pictogramas" />
+            <span class="check-card-body"><strong>Comunicador / Pictogramas</strong><span class="form-hint">Apoyo visual o del habla</span></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="wizard-actions">
+        <button type="button" class="btn btn-secondary" data-prev-step="1">← Atrás</button>
+        <button type="button" class="btn btn-primary" data-next-step="3">
+          Siguiente: Preferencias de comunicación →
+        </button>
+      </div>
+    </fieldset>
+
+    <!-- PASO 3: Preferencias de Comunicación y Apoyos (RF-01) -->
+    <fieldset class="wizard-step" data-step="3" hidden>
+      <legend class="step-legend">Paso 3: Preferencias de comunicación y apoyos en consulta (RF-01)</legend>
+
+      <div class="grid-2">
+        <label class="check-card">
+          <input type="checkbox" id="pref-subtitles" name="subtitles" checked />
+          <span class="check-card-body">
+            <strong>Subtítulos automáticos en vivo (RF-03)</strong>
+            <span class="form-hint">Muestra en tiempo real todo lo que dice el profesional durante la videoconsulta.</span>
+          </span>
+        </label>
+
+        <label class="check-card">
+          <input type="checkbox" id="pref-lsec" name="lsecInterpreter" />
+          <span class="check-card-body">
+            <strong>Intérprete LSEc en ventana fija (RF-04)</strong>
+            <span class="form-hint">Asigna un intérprete acreditado y reserva +15 min adicionales en tu cita.</span>
+          </span>
+        </label>
+
+        <label class="check-card">
+          <input type="checkbox" id="pref-tts" name="ttsAudio" />
+          <span class="check-card-body">
+            <strong>Lectura por voz (TTS) de indicaciones (RF-05)</strong>
+            <span class="form-hint">Permite escuchar en audio claro las recetas aprobadas y formularios.</span>
+          </span>
+        </label>
+
+        <label class="check-card">
+          <input type="checkbox" id="pref-easyread" name="easyReadPictograms" />
+          <span class="check-card-body">
+            <strong>Lectura Fácil y Pictogramas (RF-05)</strong>
+            <span class="form-hint">Estructura las indicaciones médicas en frases cortas con íconos visuales.</span>
+          </span>
+        </label>
+
+        <label class="check-card">
+          <input type="checkbox" id="pref-contrast" name="highContrast" />
+          <span class="check-card-body">
+            <strong>Modo Alto Contraste (Negro / Amarillo)</strong>
+            <span class="form-hint">Maximiza la legibilidad visual en pantalla.</span>
+          </span>
+        </label>
+
+        <div class="form-group card" style="margin-bottom: 0; background: var(--bg);">
+          <label class="form-label" for="pref-fontscale">Tamaño de letra preferido (WCAG 1.4.4)</label>
+          <select id="pref-fontscale" name="fontScale" class="form-control">
+            <option value="1">100% (Estándar)</option>
+            <option value="1.25">125% (Mediano)</option>
+            <option value="1.5">150% (Grande)</option>
+            <option value="1.75">175% (Muy grande)</option>
+            <option value="2">200% (Máximo accesible)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card mt-2" style="background: var(--bg);">
+        <h3>Canales de recordatorios multimodales (RF-06)</h3>
+        <div class="grid-auto mt-1">
+          <label class="check-card">
+            <input type="checkbox" id="pref-rem-visual" name="remindersVisual" checked />
+            <span class="check-card-body"><strong>Alerta visual en pantalla</strong><span class="form-hint">Destello luminoso y aviso grande</span></span>
+          </label>
+          <label class="check-card">
+            <input type="checkbox" id="pref-rem-vibration" name="remindersVibration" checked />
+            <span class="check-card-body"><strong>Vibración en dispositivo</strong><span class="form-hint">Patrón táctil en teléfonos compatibles</span></span>
+          </label>
+          <label class="check-card">
+            <input type="checkbox" id="pref-rem-audio" name="remindersAudio" checked />
+            <span class="check-card-body"><strong>Notificación sonora / voz</strong><span class="form-hint">Tono audible y lectura breve</span></span>
+          </label>
+        </div>
+      </div>
+
+      <label class="check-card mt-2" style="border-color: var(--primary);">
+        <input type="checkbox" id="pref-apply-now" name="applyNow" checked />
+        <span class="check-card-body">
+          <strong>Aplicar automáticamente estos ajustes de accesibilidad a mi pantalla al guardar</strong>
+          <span class="form-hint">El menú de accesibilidad adoptará tu configuración elegida de inmediato.</span>
+        </span>
+      </label>
+
+      <div class="wizard-actions">
+        <button type="button" class="btn btn-secondary" data-prev-step="2">← Atrás</button>
+        <button type="button" class="btn btn-primary" data-next-step="4">
+          Siguiente: Revisar y confirmar →
+        </button>
+      </div>
+    </fieldset>
+
+    <!-- PASO 4: Consentimiento Informado y Confirmación Explícita (Criterio 3.3.4) -->
+    <fieldset class="wizard-step" data-step="4" hidden>
+      <legend class="step-legend">Paso 4: Verificación de datos y consentimiento informado (WCAG 3.3.4)</legend>
+      <p class="form-hint">
+        Revisa el resumen antes de guardar tu registro. Si necesitas corregir algo, usa el botón "Atrás".
+      </p>
+
+      <div id="confirmation-summary-box" class="alert-box mb-2">
+        Cargando resumen de verificación...
+      </div>
+
+      <div class="alert-box warning mb-2">
+        <strong>Protección de datos personales y clínicos (Lectura Fácil):</strong>
+        <ul style="margin: 0.4rem 0 0 1.2rem;">
+          <li>Tus datos de salud y discapacidad solo los ven los profesionales e intérpretes autorizados de tu cita.</li>
+          <li>El componente de IA de apoyo nunca diagnostica ni receta medicamentos; solo organiza apoyos y borradores que aprueba tu médico.</li>
+          <li>Puedes modificar tus preferencias o permisos en cualquier momento.</li>
+        </ul>
+      </div>
+
+      <label class="check-card" id="consent-card">
+        <input
+          type="checkbox"
+          id="reg-consent"
+          name="consentAccepted"
+          aria-describedby="err-consent"
+          required
+        />
+        <span class="check-card-body">
+          <strong>Acepto el consentimiento informado y confirmo que mis datos son correctos *</strong>
+          <span class="form-hint">Requisito obligatorio de prevención de errores antes de registrar la ficha clínica.</span>
+        </span>
+      </label>
+      <span class="field-error mt-1" id="err-consent"></span>
+
+      <div class="wizard-actions">
+        <button type="button" class="btn btn-secondary" data-prev-step="3">← Atrás para editar</button>
+        <button type="submit" class="btn btn-primary" id="submit-registration-btn">
+          ✅ Confirmar y Guardar Registro
+        </button>
+      </div>
+    </fieldset>
+  </form>
+
+  <!-- Resultado exitoso tras guardar y ejecutar el Harness IA -->
+  <section id="registration-success-panel" class="card mt-3" hidden aria-live="polite">
+    <div class="alert-box success mb-2">
+      <strong>✅ ¡Usuario registrado con éxito!</strong>
+      <p style="margin: 0.35rem 0 0 0;">
+        Se guardó el perfil en el sistema y el <strong>Harness de IA No Conversacional</strong> generó su
+        Ficha Clínica de Apoyos (<code>ANALYZE_ACCESSIBILITY_NEEDS</code>).
+      </p>
+    </div>
+
+    <div id="generated-ai-brief-box"></div>
+
+    <div class="flex-wrap mt-2">
+      <a href="/usuarios-registrados" class="btn btn-primary">
+        👥 Ver en Directorio de Usuarios Registrados
+      </a>
+      <button type="button" class="btn btn-accent" id="listen-generated-brief-btn">
+        🔊 Escuchar ficha generada (TTS)
+      </button>
+      <button type="button" class="btn btn-secondary" id="register-another-btn">
+        ➕ Registrar otro paciente
+      </button>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .progress-track {
+    width: 100%;
+    height: 14px;
+    border-radius: 999px;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--primary);
+    transition: width 0.2s ease;
+  }
+
+  .step-pills {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .step-pill {
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    background: var(--surface-alt);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+  }
+
+  .step-pill.active {
+    background: var(--primary);
+    color: var(--primary-text);
+    border-color: var(--primary);
+  }
+
+  .wizard-step {
+    border: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .wizard-step[hidden],
+  #registration-success-panel[hidden],
+  #wizard-error-summary[hidden] {
+    display: none;
+  }
+
+  .step-legend {
+    font-size: 1.25rem;
+    font-weight: 800;
+    margin-bottom: 1rem;
+    color: var(--text);
+  }
+
+  .wizard-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 2px solid var(--border-subtle);
+  }
+
+  .icon-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: var(--surface-alt);
+    color: var(--primary);
+    border: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+  }
+</style>
+
+<script>
+  import {
+    applyAccessibilityState,
+    loadAccessibilityState,
+    speakText,
+    triggerVisualAlert,
+  } from '../lib/accessibility';
+  import { executeAIHarnessTask } from '../lib/ai-harness';
+  import type {
+    CommunicationPreferences,
+    ConnectivityLevel,
+    DisabilityCategory,
+  } from '../lib/ai-harness/types';
+  import { DISABILITY_LABELS, addPatient, type RegisteredPatient } from '../lib/store';
+
+  const form = document.getElementById('patient-registration-form') as HTMLFormElement;
+  const steps = Array.from(document.querySelectorAll<HTMLFieldSetElement>('.wizard-step'));
+  const stepPills = Array.from(document.querySelectorAll<HTMLElement>('[data-step-pill]'));
+  const progressBar = document.getElementById('wizard-progressbar');
+  const progressFill = document.getElementById('wizard-progress-fill');
+  const progressLabel = document.getElementById('step-progress-label');
+  const progressPercent = document.getElementById('step-progress-percent');
+  const errorSummary = document.getElementById('wizard-error-summary');
+  const errorList = document.getElementById('wizard-error-list');
+  const summaryBox = document.getElementById('confirmation-summary-box');
+  const successPanel = document.getElementById('registration-success-panel');
+  const generatedBriefBox = document.getElementById('generated-ai-brief-box');
+
+  let currentStep = 1;
+  let lastGeneratedTts = '';
+
+  const STEP_TITLES: Record<number, string> = {
+    1: 'Paso 1 de 4: Datos personales',
+    2: 'Paso 2 de 4: Información de discapacidad',
+    3: 'Paso 3 de 4: Preferencias de comunicación',
+    4: 'Paso 4 de 4: Confirmación y consentimiento',
+  };
+
+  function setFieldError(inputId: string, errorId: string, message: string) {
+    const input = document.getElementById(inputId);
+    const errEl = document.getElementById(errorId);
+    if (input) {
+      input.setAttribute('aria-invalid', message ? 'true' : 'false');
+    }
+    if (errEl) {
+      errEl.textContent = message;
+      errEl.classList.toggle('visible', Boolean(message));
+    }
+  }
+
+  function clearAllErrors() {
+    setFieldError('reg-fullname', 'err-fullname', '');
+    setFieldError('reg-cedula', 'err-cedula', '');
+    setFieldError('reg-age', 'err-age', '');
+    setFieldError('reg-phone', 'err-phone', '');
+    setFieldError('reg-details', 'err-details', '');
+    setFieldError('reg-consent', 'err-consent', '');
+    const errDis = document.getElementById('err-disabilities');
+    if (errDis) {
+      errDis.textContent = '';
+      errDis.classList.remove('visible');
+    }
+    if (errorSummary) errorSummary.hidden = true;
+    if (errorList) errorList.innerHTML = '';
+  }
+
+  function showSummaryErrors(errors: Array<{ label: string; focusId?: string }>) {
+    if (!errorSummary || !errorList) return;
+    errorList.innerHTML = '';
+    errors.forEach((err) => {
+      const li = document.createElement('li');
+      li.textContent = err.label;
+      errorList.appendChild(li);
+    });
+    errorSummary.hidden = false;
+    errorSummary.focus();
+  }
+
+  function getCheckedValues(name: string): string[] {
+    return Array.from(
+      form.querySelectorAll<HTMLInputElement>(`input[name="${name}"]:checked`)
+    ).map((el) => el.value);
+  }
+
+  function validateStep(step: number): boolean {
+    clearAllErrors();
+    const errors: Array<{ label: string; focusId?: string }> = [];
+
+    if (step === 1) {
+      const fullName = (document.getElementById('reg-fullname') as HTMLInputElement).value.trim();
+      const cedula = (document.getElementById('reg-cedula') as HTMLInputElement).value.trim();
+      const ageVal = Number((document.getElementById('reg-age') as HTMLInputElement).value);
+      const phone = (document.getElementById('reg-phone') as HTMLInputElement).value.trim();
+
+      if (fullName.length < 4 || !fullName.includes(' ')) {
+        const msg = 'Sugerencia: escribe tu nombre y al menos un apellido (mínimo 4 caracteres).';
+        setFieldError('reg-fullname', 'err-fullname', msg);
+        errors.push({ label: `Nombre completo: ${msg}`, focusId: 'reg-fullname' });
+      }
+      if (!/^\d{10}$/.test(cedula)) {
+        const msg = 'Sugerencia: ingresa exactamente 10 dígitos numéricos de cédula sin guiones.';
+        setFieldError('reg-cedula', 'err-cedula', msg);
+        errors.push({ label: `Cédula: ${msg}`, focusId: 'reg-cedula' });
+      }
+      if (!Number.isFinite(ageVal) || ageVal < 1 || ageVal > 120) {
+        const msg = 'Sugerencia: ingresa una edad válida entre 1 y 120 años.';
+        setFieldError('reg-age', 'err-age', msg);
+        errors.push({ label: `Edad: ${msg}`, focusId: 'reg-age' });
+      }
+      if (!/^\d{7,13}$/.test(phone.replace(/[\s-]/g, ''))) {
+        const msg = 'Sugerencia: ingresa un número telefónico válido de 7 a 10 dígitos (ej. 0991234567).';
+        setFieldError('reg-phone', 'err-phone', msg);
+        errors.push({ label: `Teléfono: ${msg}`, focusId: 'reg-phone' });
+      }
+    }
+
+    if (step === 2) {
+      const disabilities = getCheckedValues('disabilities');
+      const details = (document.getElementById('reg-details') as HTMLTextAreaElement).value.trim();
+
+      if (disabilities.length === 0) {
+        const msg = 'Sugerencia: marca al menos una categoría de discapacidad para asignar tus apoyos.';
+        const errDis = document.getElementById('err-disabilities');
+        if (errDis) {
+          errDis.textContent = msg;
+          errDis.classList.add('visible');
+        }
+        errors.push({ label: `Categoría de discapacidad: ${msg}` });
+      }
+      if (details.length < 10) {
+        const msg = 'Sugerencia: describe brevemente tus necesidades de comunicación (mínimo 10 caracteres).';
+        setFieldError('reg-details', 'err-details', msg);
+        errors.push({ label: `Detalle funcional: ${msg}`, focusId: 'reg-details' });
+      }
+    }
+
+    if (step === 4) {
+      const consent = (document.getElementById('reg-consent') as HTMLInputElement).checked;
+      if (!consent) {
+        const msg = 'Sugerencia: marca la casilla de consentimiento informado antes de finalizar el registro.';
+        setFieldError('reg-consent', 'err-consent', msg);
+        errors.push({ label: `Consentimiento: ${msg}`, focusId: 'reg-consent' });
+      }
+    }
+
+    if (errors.length > 0) {
+      showSummaryErrors(errors);
+      return false;
+    }
+    return true;
+  }
+
+  function buildConfirmationSummary() {
+    if (!summaryBox) return;
+    const fullName = (document.getElementById('reg-fullname') as HTMLInputElement).value.trim();
+    const cedula = (document.getElementById('reg-cedula') as HTMLInputElement).value.trim();
+    const age = (document.getElementById('reg-age') as HTMLInputElement).value.trim();
+    const phone = (document.getElementById('reg-phone') as HTMLInputElement).value.trim();
+    const connectivity = (document.getElementById('reg-connectivity') as HTMLSelectElement).value;
+    const disabilities = getCheckedValues('disabilities') as DisabilityCategory[];
+    const tech = getCheckedValues('assistiveTech');
+
+    const supports: string[] = [];
+    if ((document.getElementById('pref-subtitles') as HTMLInputElement).checked) supports.push('Subtítulos en vivo');
+    if ((document.getElementById('pref-lsec') as HTMLInputElement).checked) supports.push('Intérprete LSEc (+15 min)');
+    if ((document.getElementById('pref-tts') as HTMLInputElement).checked) supports.push('Lectura por voz (TTS)');
+    if ((document.getElementById('pref-easyread') as HTMLInputElement).checked) supports.push('Lectura Fácil y Pictogramas');
+    if ((document.getElementById('pref-contrast') as HTMLInputElement).checked) supports.push('Alto Contraste');
+
+    summaryBox.innerHTML = `
+      <strong>Resumen de verificación previo al envío:</strong>
+      <ul style="margin: 0.45rem 0 0 1.2rem;">
+        <li><strong>Paciente:</strong> ${fullName} (C.I. ${cedula}, ${age} años) · Tel: ${phone}</li>
+        <li><strong>Conectividad:</strong> ${connectivity.toUpperCase()}</li>
+        <li><strong>Discapacidad declarada:</strong> ${disabilities.map((d) => DISABILITY_LABELS[d]).join(', ')}</li>
+        <li><strong>Tecnología de asistencia:</strong> ${tech.length > 0 ? tech.join(', ') : 'Ninguna adicional indicada'}</li>
+        <li><strong>Apoyos seleccionados:</strong> ${supports.length > 0 ? supports.join(', ') : 'Estándar WCAG AA'}</li>
+      </ul>
+    `;
+  }
+
+  function goToStep(targetStep: number) {
+    currentStep = targetStep;
+    steps.forEach((stepEl) => {
+      const s = Number(stepEl.dataset.step);
+      stepEl.hidden = s !== currentStep;
+    });
+    stepPills.forEach((pill) => {
+      const s = Number(pill.dataset.stepPill);
+      pill.classList.toggle('active', s === currentStep);
+    });
+
+    const pct = currentStep * 25;
+    if (progressBar) progressBar.setAttribute('aria-valuenow', String(currentStep));
+    if (progressFill) progressFill.style.width = `${pct}%`;
+    if (progressLabel) progressLabel.textContent = STEP_TITLES[currentStep];
+    if (progressPercent) progressPercent.textContent = `${pct}% completado`;
+
+    if (currentStep === 4) {
+      buildConfirmationSummary();
+    }
+
+    const activeLegend = steps.find((s) => Number(s.dataset.step) === currentStep)?.querySelector('legend');
+    if (activeLegend instanceof HTMLElement) {
+      activeLegend.setAttribute('tabindex', '-1');
+      activeLegend.focus();
+    }
+  }
+
+  // Sugerencia inteligente en Paso 2 -> Paso 3 según discapacidad seleccionada
+  function prefillPreferencesFromDisabilities() {
+    const disabilities = getCheckedValues('disabilities') as DisabilityCategory[];
+    const lsecChk = document.getElementById('pref-lsec') as HTMLInputElement;
+    const ttsChk = document.getElementById('pref-tts') as HTMLInputElement;
+    const easyChk = document.getElementById('pref-easyread') as HTMLInputElement;
+    const contrastChk = document.getElementById('pref-contrast') as HTMLInputElement;
+    const fontSel = document.getElementById('pref-fontscale') as HTMLSelectElement;
+
+    if (disabilities.includes('auditiva')) lsecChk.checked = true;
+    if (disabilities.includes('visual')) {
+      ttsChk.checked = true;
+      contrastChk.checked = true;
+      if (fontSel.value === '1') fontSel.value = '1.5';
+    }
+    if (disabilities.includes('cognitiva')) easyChk.checked = true;
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('[data-next-step]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (!validateStep(currentStep)) return;
+      const next = Number(btn.dataset.nextStep);
+      if (currentStep === 2 && next === 3) {
+        prefillPreferencesFromDisabilities();
+      }
+      goToStep(next);
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-prev-step]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      clearAllErrors();
+      goToStep(Number(btn.dataset.prevStep));
+    });
+  });
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!validateStep(4)) return;
+
+    const fullName = (document.getElementById('reg-fullname') as HTMLInputElement).value.trim();
+    const cedula = (document.getElementById('reg-cedula') as HTMLInputElement).value.trim();
+    const age = Number((document.getElementById('reg-age') as HTMLInputElement).value);
+    const phone = (document.getElementById('reg-phone') as HTMLInputElement).value.trim();
+    const supportContact = (document.getElementById('reg-support') as HTMLInputElement).value.trim() || 'No registrado';
+    const connectivity = (document.getElementById('reg-connectivity') as HTMLSelectElement).value as ConnectivityLevel;
+    const disabilities = getCheckedValues('disabilities') as DisabilityCategory[];
+    const disabilityDetails = (document.getElementById('reg-details') as HTMLTextAreaElement).value.trim();
+    const assistiveTech = getCheckedValues('assistiveTech');
+
+    const preferences: CommunicationPreferences = {
+      subtitles: (document.getElementById('pref-subtitles') as HTMLInputElement).checked,
+      lsecInterpreter: (document.getElementById('pref-lsec') as HTMLInputElement).checked,
+      ttsAudio: (document.getElementById('pref-tts') as HTMLInputElement).checked,
+      easyReadPictograms: (document.getElementById('pref-easyread') as HTMLInputElement).checked,
+      highContrast: (document.getElementById('pref-contrast') as HTMLInputElement).checked,
+      fontScale: Number((document.getElementById('pref-fontscale') as HTMLSelectElement).value),
+      remindersVisual: (document.getElementById('pref-rem-visual') as HTMLInputElement).checked,
+      remindersVibration: (document.getElementById('pref-rem-vibration') as HTMLInputElement).checked,
+      remindersAudio: (document.getElementById('pref-rem-audio') as HTMLInputElement).checked,
+    };
+
+    const submitBtn = document.getElementById('submit-registration-btn') as HTMLButtonElement;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Procesando ficha de accesibilidad...';
+
+    try {
+      const harnessResult = await executeAIHarnessTask('ANALYZE_ACCESSIBILITY_NEEDS', {
+        patientName: fullName,
+        age,
+        disabilities,
+        disabilityDetails,
+        assistiveTech,
+        communicationPreferences: preferences,
+        connectivity,
+      });
+
+      const newPatient: RegisteredPatient = {
+        id: `pac-${Date.now().toString(36)}`,
+        fullName,
+        cedula,
+        age,
+        phone,
+        supportContact,
+        connectivity,
+        disabilities,
+        disabilityDetails,
+        assistiveTech,
+        preferences,
+        consentAccepted: true,
+        createdAt: new Date().toISOString(),
+        aiAccessibilityBrief: harnessResult.data,
+      };
+
+      addPatient(newPatient);
+
+      const applyNow = (document.getElementById('pref-apply-now') as HTMLInputElement).checked;
+      if (applyNow) {
+        const currentA11y = loadAccessibilityState();
+        applyAccessibilityState({
+          ...currentA11y,
+          fontScale: harnessResult.data.appliedInterfacePreset.fontScale,
+          contrast: harnessResult.data.appliedInterfacePreset.contrast,
+          ttsFocusAuto: harnessResult.data.appliedInterfacePreset.ttsAuto,
+          easyRead: harnessResult.data.appliedInterfacePreset.easyRead,
+          subtitlesDefault: harnessResult.data.appliedInterfacePreset.subtitlesDefault,
+          visualAlerts: harnessResult.data.appliedInterfacePreset.visualAlerts,
+          focusEnhanced: disabilities.includes('motriz') || currentA11y.focusEnhanced,
+        });
+      }
+
+      if (generatedBriefBox) {
+        generatedBriefBox.innerHTML = `
+          <div class="card" style="background: var(--bg);">
+            <div class="flex-wrap" style="justify-content: space-between;">
+              <h3>Ficha de Preparación Clínica (IA No Conversacional)</h3>
+              <span class="badge badge-info">Proveedor: ${harnessResult.provider} · ${harnessResult.latencyMs} ms</span>
+            </div>
+            <p class="mt-1"><strong>${harnessResult.data.summaryBanner}</strong></p>
+            <p class="form-hint">${harnessResult.data.bandwidthRecommendation}</p>
+            <div class="grid-2 mt-2">
+              <div>
+                <strong>Apoyos obligatorios para la consulta:</strong>
+                <ul>${harnessResult.data.mandatorySupports.map((s) => `<li>${s}</li>`).join('')}</ul>
+              </div>
+              <div>
+                <strong>Lista de verificación para el médico e intérprete:</strong>
+                <ul>${harnessResult.data.professionalChecklist.map((c) => `<li>${c}</li>`).join('')}</ul>
+              </div>
+            </div>
+            <p class="form-hint" style="margin-bottom: 0;">${harnessResult.guardrails.disclaimer}</p>
+          </div>
+        `;
+      }
+
+      lastGeneratedTts = `Paciente ${fullName} registrado correctamente. ${harnessResult.data.summaryBanner}. Apoyos obligatorios: ${harnessResult.data.mandatorySupports.join(' ')}`;
+
+      form.hidden = true;
+      if (successPanel) {
+        successPanel.hidden = false;
+        successPanel.scrollIntoView({ behavior: 'smooth' });
+      }
+
+      triggerVisualAlert(`Paciente ${fullName} registrado con sus preferencias de discapacidad.`, {
+        speak: preferences.ttsAudio,
+      });
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = '✅ Confirmar y Guardar Registro';
+    }
+  });
+
+  document.getElementById('listen-generated-brief-btn')?.addEventListener('click', () => {
+    speakText(lastGeneratedTts);
+  });
+
+  document.getElementById('register-another-btn')?.addEventListener('click', () => {
+    form.reset();
+    clearAllErrors();
+    goToStep(1);
+    form.hidden = false;
+    if (successPanel) successPanel.hidden = true;
+  });
+</script>

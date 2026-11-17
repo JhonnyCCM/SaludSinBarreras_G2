@@ -1,0 +1,515 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="Usuarios Registrados, Ficha Clínica y Agenda"
+  description="Listado de pacientes registrados con información de discapacidad, ficha de apoyos para el profesional (RF-09), agenda médica con holgura LSEc (RF-08) y registro de intérpretes (RF-11)."
+>
+  <section class="card mb-3">
+    <div class="flex-wrap" style="justify-content: space-between;">
+      <div>
+        <span class="badge badge-info mb-1">Tareas T2-U2, T1-U2, T1-U3 · RF-08, RF-09, RF-11, RF-12</span>
+        <h1>Usuarios Registrados con Información de Discapacidad</h1>
+        <p style="margin-bottom: 0;">
+          Vista unificada para demostrar los perfiles registrados, su ficha clínica de accesibilidad
+          generada por IA no conversacional, horarios médicos con holgura LSEc y solicitudes de intérpretes.
+        </p>
+      </div>
+      <div class="flex-wrap">
+        <a href="/registro-paciente" class="btn btn-primary">➕ Registrar Nuevo Paciente</a>
+        <button type="button" class="btn btn-secondary" id="reset-seeds-btn">
+          ↺ Restaurar datos semilla
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECCIÓN A: Directorio y Ficha Clínica de Discapacidad (RF-09) -->
+  <section class="card mb-3" aria-labelledby="titulo-directorio">
+    <div class="flex-wrap" style="justify-content: space-between;">
+      <h2 id="titulo-directorio">A. Pacientes Registrados y Ficha de Apoyos (RF-09)</h2>
+      <span class="badge badge-success" id="patients-count-badge" aria-live="polite">Cargando...</span>
+    </div>
+
+    <div class="flex-wrap mt-2 mb-2" role="group" aria-label="Filtrar pacientes por discapacidad">
+      <button type="button" class="btn btn-primary filter-btn" data-filter="all" aria-pressed="true">Todas</button>
+      <button type="button" class="btn btn-secondary filter-btn" data-filter="auditiva" aria-pressed="false">Auditiva</button>
+      <button type="button" class="btn btn-secondary filter-btn" data-filter="visual" aria-pressed="false">Visual</button>
+      <button type="button" class="btn btn-secondary filter-btn" data-filter="motriz" aria-pressed="false">Motriz</button>
+      <button type="button" class="btn btn-secondary filter-btn" data-filter="cognitiva" aria-pressed="false">Cognitiva</button>
+      <button type="button" class="btn btn-secondary filter-btn" data-filter="habla" aria-pressed="false">Del Habla</button>
+    </div>
+
+    <div id="patients-directory-list" class="grid-auto">
+      <p class="form-hint">Cargando directorio de pacientes...</p>
+    </div>
+  </section>
+
+  <!-- SECCIÓN B: Disponibilidad del Profesional (RF-08) y Registro/Solicitudes de Intérprete LSEc (RF-11 / RF-12) -->
+  <div class="grid-2">
+    <!-- Formulario Profesional RF-08 -->
+    <section class="card" aria-labelledby="titulo-agenda-medica">
+      <span class="badge badge-info mb-1">Tarea T1-U2 · RF-08</span>
+      <h2 id="titulo-agenda-medica">B1. Disponibilidad del Profesional (Holgura LSEc)</h2>
+      <p class="form-hint">
+        Configura bloques de atención médica. Si se marca soporte para intérprete LSEc, el sistema suma
+        automáticamente <strong>+15 minutos</strong> al bloque horario.
+      </p>
+
+      <form id="schedule-form" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="sch-doctor">Profesional de salud *</label>
+          <input type="text" id="sch-doctor" class="form-control" value="Dra. Valeria Viteri" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="sch-specialty">Especialidad *</label>
+          <input type="text" id="sch-specialty" class="form-control" value="Medicina Familiar" required />
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label" for="sch-date">Fecha *</label>
+            <input type="date" id="sch-date" class="form-control" value="2026-11-19" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="sch-time">Hora inicio *</label>
+            <input type="time" id="sch-time" class="form-control" value="11:00" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="sch-base-min">Duración base (minutos)</label>
+          <select id="sch-base-min" class="form-control">
+            <option value="20">20 minutos</option>
+            <option value="30">30 minutos</option>
+            <option value="40">40 minutos</option>
+          </select>
+        </div>
+
+        <label class="check-card mb-2">
+          <input type="checkbox" id="sch-lsec-extra" checked />
+          <span class="check-card-body">
+            <strong>Reservar tiempo adicional para intérprete LSEc (+15 min)</strong>
+            <span class="form-hint" id="sch-duration-preview">Duración total calculada: 35 minutos</span>
+          </span>
+        </label>
+
+        <button type="submit" class="btn btn-primary">📅 Publicar Horario en Agenda</button>
+      </form>
+
+      <h3 class="mt-3">Horarios publicados</h3>
+      <div id="schedules-list" class="mt-1"></div>
+    </section>
+
+    <!-- Formulario Intérprete LSEc RF-11 y RF-12 -->
+    <section class="card" aria-labelledby="titulo-interpretes">
+      <span class="badge badge-info mb-1">Tareas T1-U3 y T2-U3 · RF-11 y RF-12</span>
+      <h2 id="titulo-interpretes">B2. Registro de Intérprete LSEc y Solicitudes</h2>
+      <p class="form-hint">
+        Acredita intérpretes de Lengua de Señas Ecuatoriana y confirma o rechaza asignaciones de citas en 1 clic.
+      </p>
+
+      <form id="interpreter-form" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="int-name">Nombre del intérprete *</label>
+          <input type="text" id="int-name" class="form-control" placeholder="Ej.: Lic. Andrea Cevallos" required />
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label" for="int-code">Código acreditación LSEc *</label>
+            <input type="text" id="int-code" class="form-control" placeholder="CONADIS-LSEC-0891" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="int-valid">Vigencia acreditación *</label>
+            <input type="date" id="int-valid" class="form-control" value="2027-12-31" required />
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label" for="int-days">Días disponibles</label>
+            <input type="text" id="int-days" class="form-control" value="Lunes, Miércoles y Jueves" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="int-window">Franja horaria</label>
+            <input type="text" id="int-window" class="form-control" value="08:00 - 13:00" />
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary">🪪 Registrar Intérprete Acreditado</button>
+      </form>
+
+      <h3 class="mt-3">Intérpretes y Bandeja de Solicitudes (RF-12)</h3>
+      <div id="interpreters-list" class="mt-1"></div>
+    </section>
+  </div>
+</BaseLayout>
+
+<style>
+  .patient-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    background: var(--bg);
+  }
+
+  .tag-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: 999px;
+    border: 1px solid var(--primary);
+    background: var(--surface);
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+
+  .sub-item-card {
+    padding: 0.85rem;
+    border-radius: var(--radius);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg);
+    margin-bottom: 0.65rem;
+  }
+</style>
+
+<script>
+  import {
+    applyAccessibilityState,
+    loadAccessibilityState,
+    speakText,
+    triggerVisualAlert,
+  } from '../lib/accessibility';
+  import type { DisabilityCategory } from '../lib/ai-harness/types';
+  import { getDisabilityIconSvg } from '../lib/pictograms';
+  import {
+    DISABILITY_LABELS,
+    addInterpreter,
+    addProfessionalSchedule,
+    getInterpreters,
+    getPatients,
+    getProfessionalSchedules,
+    resetPatientsSeed,
+    updateInterpreterRequestStatus,
+    type RegisteredPatient,
+  } from '../lib/store';
+
+  function esc(str: string): string {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  let activeFilter: 'all' | DisabilityCategory = 'all';
+
+  const patientsContainer = document.getElementById('patients-directory-list');
+  const countBadge = document.getElementById('patients-count-badge');
+  const schedulesContainer = document.getElementById('schedules-list');
+  const interpretersContainer = document.getElementById('interpreters-list');
+
+  function applyUserPreset(patient: RegisteredPatient) {
+    const preset = patient.aiAccessibilityBrief.appliedInterfacePreset;
+    const current = loadAccessibilityState();
+    applyAccessibilityState({
+      ...current,
+      fontScale: preset.fontScale,
+      contrast: preset.contrast,
+      ttsFocusAuto: preset.ttsAuto,
+      easyRead: preset.easyRead,
+      subtitlesDefault: preset.subtitlesDefault,
+      visualAlerts: preset.visualAlerts,
+      focusEnhanced: patient.disabilities.includes('motriz') || current.focusEnhanced,
+    });
+    triggerVisualAlert(
+      `Simulación activa: vista configurada para ${patient.fullName} (${Math.round(preset.fontScale * 100)}%, contraste ${preset.contrast}).`,
+      { speak: preset.ttsAuto }
+    );
+  }
+
+  function renderPatients() {
+    if (!patientsContainer || !countBadge) return;
+    const all = getPatients();
+    const filtered =
+      activeFilter === 'all'
+        ? all
+        : all.filter((p) => p.disabilities.includes(activeFilter as DisabilityCategory));
+
+    countBadge.textContent = `${filtered.length} de ${all.length} usuario(s)`;
+    patientsContainer.innerHTML = '';
+
+    if (filtered.length === 0) {
+      patientsContainer.innerHTML = `<p class="alert-box warning">No hay pacientes registrados en la categoría seleccionada.</p>`;
+      return;
+    }
+
+    filtered.forEach((patient) => {
+      const card = document.createElement('article');
+      card.className = 'card patient-card';
+
+      const tagsHtml = patient.disabilities
+        .map(
+          (d) =>
+            `<span class="tag-pill">${getDisabilityIconSvg(d)} <span>${esc(
+              DISABILITY_LABELS[d].split(' ')[0]
+            )}</span></span>`
+        )
+        .join(' ');
+
+      const brief = patient.aiAccessibilityBrief;
+
+      card.innerHTML = `
+        <div class="flex-wrap" style="justify-content: space-between;">
+          <div>
+            <h3 style="margin-bottom: 0.2rem;">${esc(patient.fullName)}</h3>
+            <span class="form-hint">C.I. ${esc(patient.cedula)} · ${patient.age} años · Conectividad: <strong>${esc(
+        patient.connectivity.toUpperCase()
+      )}</strong></span>
+          </div>
+          ${
+            brief.requiresExtraSessionTime
+              ? `<span class="badge badge-warning">+${brief.recommendedExtraMinutes} min cita</span>`
+              : `<span class="badge badge-success">Cita estándar</span>`
+          }
+        </div>
+
+        <div class="flex-wrap">${tagsHtml}</div>
+
+        <p style="margin: 0;"><strong>Detalle clínico-funcional:</strong> ${esc(patient.disabilityDetails)}</p>
+        <p style="margin: 0;" class="form-hint">
+          <strong>Tecnología de asistencia:</strong> ${esc(
+            patient.assistiveTech.join(', ') || 'Estándar'
+          )}<br />
+          <strong>Contacto de apoyo:</strong> ${esc(patient.supportContact)}
+        </p>
+
+        <div class="alert-box" style="padding: 0.75rem;">
+          <strong>🤖 Ficha IA No Conversacional para el Profesional (RF-09):</strong>
+          <ul style="margin: 0.35rem 0 0 1.15rem; padding: 0;">
+            ${brief.mandatorySupports.map((s) => `<li>${esc(s)}</li>`).join('')}
+          </ul>
+          <p class="form-hint" style="margin: 0.45rem 0 0 0;">${esc(brief.bandwidthRecommendation)}</p>
+        </div>
+      `;
+
+      const actions = document.createElement('div');
+      actions.className = 'flex-wrap';
+
+      const ttsBtn = document.createElement('button');
+      ttsBtn.type = 'button';
+      ttsBtn.className = 'btn btn-accent';
+      ttsBtn.textContent = '🔊 Escuchar ficha (TTS)';
+      ttsBtn.addEventListener('click', () => {
+        const text = `Ficha del paciente ${patient.fullName}, ${patient.age} años. ${brief.summaryBanner}. Apoyos obligatorios: ${brief.mandatorySupports.join(' ')}. Recomendación para el médico: ${brief.professionalChecklist.join(' ')}`;
+        speakText(text);
+      });
+
+      const simBtn = document.createElement('button');
+      simBtn.type = 'button';
+      simBtn.className = 'btn btn-primary';
+      simBtn.textContent = '♿ Simular accesibilidad de este usuario';
+      simBtn.addEventListener('click', () => applyUserPreset(patient));
+
+      actions.appendChild(ttsBtn);
+      actions.appendChild(simBtn);
+      card.appendChild(actions);
+      patientsContainer.appendChild(card);
+    });
+  }
+
+  function renderSchedules() {
+    if (!schedulesContainer) return;
+    const list = getProfessionalSchedules();
+    schedulesContainer.innerHTML = list
+      .map(
+        (sch) => `
+      <div class="sub-item-card">
+        <div class="flex-wrap" style="justify-content: space-between;">
+          <strong>${esc(sch.doctorName)} — ${esc(sch.specialty)}</strong>
+          <span class="badge ${sch.includesLsecExtraTime ? 'badge-warning' : 'badge-info'}">
+            ${sch.totalMinutes} min totales
+          </span>
+        </div>
+        <div class="form-hint mt-1">
+          📅 ${esc(sch.date)} · ⏰ ${esc(sch.startTime)} · Base ${sch.baseMinutes} min ${
+            sch.includesLsecExtraTime ? '+ 15 min holgura LSEc' : ''
+          }
+        </div>
+        <div class="form-hint">${esc(sch.notes)}</div>
+      </div>
+    `
+      )
+      .join('');
+  }
+
+  function renderInterpreters() {
+    if (!interpretersContainer) return;
+    const list = getInterpreters();
+    interpretersContainer.innerHTML = '';
+
+    list.forEach((interp) => {
+      const box = document.createElement('div');
+      box.className = 'sub-item-card';
+
+      let requestHtml = '<span class="form-hint">Sin solicitudes pendientes asignadas.</span>';
+      if (interp.pendingRequest) {
+        const req = interp.pendingRequest;
+        const badgeClass =
+          req.status === 'CONFIRMADA'
+            ? 'badge-success'
+            : req.status === 'RECHAZADA'
+              ? 'badge-danger'
+              : 'badge-warning';
+        requestHtml = `
+          <div class="mt-1" style="padding-top: 0.5rem; border-top: 1px solid var(--border-subtle);">
+            <div class="flex-wrap" style="justify-content: space-between;">
+              <strong>Solicitud: ${esc(req.patientName)} (${esc(req.specialty)})</strong>
+              <span class="badge ${badgeClass}">${esc(req.status)}</span>
+            </div>
+            <div class="form-hint">Cita: ${esc(req.dateTime)} · con ${esc(req.doctorName)}</div>
+            <div class="flex-wrap mt-1" data-req-actions="${esc(interp.id)}"></div>
+          </div>
+        `;
+      }
+
+      box.innerHTML = `
+        <div class="flex-wrap" style="justify-content: space-between;">
+          <strong>${esc(interp.fullName)}</strong>
+          <span class="badge badge-success">Acreditado: ${esc(interp.accreditationCode)}</span>
+        </div>
+        <div class="form-hint mt-1">
+          Disponible: ${esc(interp.availabilityDays)} (${esc(interp.timeWindow)}) · Vigente hasta ${esc(
+        interp.validUntil
+      )}
+        </div>
+        ${requestHtml}
+      `;
+
+      const actionSlot = box.querySelector(`[data-req-actions="${interp.id}"]`);
+      if (actionSlot && interp.pendingRequest) {
+        const confirmBtn = document.createElement('button');
+        confirmBtn.type = 'button';
+        confirmBtn.className = 'btn btn-success';
+        confirmBtn.textContent = '✅ Confirmar';
+        confirmBtn.addEventListener('click', () => {
+          updateInterpreterRequestStatus(interp.id, 'CONFIRMADA');
+          renderInterpreters();
+          triggerVisualAlert(`Solicitud confirmada por ${interp.fullName}.`);
+        });
+
+        const rejectBtn = document.createElement('button');
+        rejectBtn.type = 'button';
+        rejectBtn.className = 'btn btn-danger';
+        rejectBtn.textContent = '❌ Rechazar';
+        rejectBtn.addEventListener('click', () => {
+          updateInterpreterRequestStatus(interp.id, 'RECHAZADA');
+          renderInterpreters();
+          triggerVisualAlert(`Solicitud rechazada por ${interp.fullName}. Se notificará reasignación.`);
+        });
+
+        actionSlot.appendChild(confirmBtn);
+        actionSlot.appendChild(rejectBtn);
+      }
+
+      interpretersContainer.appendChild(box);
+    });
+  }
+
+  // Filtros de discapacidad
+  document.querySelectorAll<HTMLButtonElement>('.filter-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      activeFilter = (btn.dataset.filter as 'all' | DisabilityCategory) || 'all';
+      document.querySelectorAll<HTMLButtonElement>('.filter-btn').forEach((other) => {
+        const active = other === btn;
+        other.setAttribute('aria-pressed', active ? 'true' : 'false');
+        other.classList.toggle('btn-primary', active);
+        other.classList.toggle('btn-secondary', !active);
+      });
+      renderPatients();
+    });
+  });
+
+  // Cálculo automático de holgura LSEc en horario médico
+  const baseMinSel = document.getElementById('sch-base-min') as HTMLSelectElement;
+  const lsecExtraChk = document.getElementById('sch-lsec-extra') as HTMLInputElement;
+  const durationPreview = document.getElementById('sch-duration-preview');
+
+  function updateDurationPreview() {
+    const base = Number(baseMinSel?.value || 20);
+    const extra = lsecExtraChk?.checked ? 15 : 0;
+    if (durationPreview) {
+      durationPreview.textContent = `Duración total calculada: ${base + extra} minutos`;
+    }
+  }
+  baseMinSel?.addEventListener('change', updateDurationPreview);
+  lsecExtraChk?.addEventListener('change', updateDurationPreview);
+
+  document.getElementById('schedule-form')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const doctorName = (document.getElementById('sch-doctor') as HTMLInputElement).value.trim();
+    const specialty = (document.getElementById('sch-specialty') as HTMLInputElement).value.trim();
+    const date = (document.getElementById('sch-date') as HTMLInputElement).value;
+    const startTime = (document.getElementById('sch-time') as HTMLInputElement).value;
+    const baseMinutes = Number(baseMinSel.value);
+    const includesLsecExtraTime = lsecExtraChk.checked;
+
+    if (!doctorName || !specialty || !date || !startTime) {
+      triggerVisualAlert('Completa los campos obligatorios del horario médico.');
+      return;
+    }
+
+    const totalMinutes = baseMinutes + (includesLsecExtraTime ? 15 : 0);
+    addProfessionalSchedule({
+      id: `sch-${Date.now().toString(36)}`,
+      doctorName,
+      specialty,
+      date,
+      startTime,
+      baseMinutes,
+      includesLsecExtraTime,
+      totalMinutes,
+      notes: includesLsecExtraTime
+        ? 'Incluye +15 min de holgura para intérprete LSEc (RF-08).'
+        : 'Consulta estándar accesible.',
+    });
+    renderSchedules();
+    triggerVisualAlert(`Horario publicado para ${doctorName} (${totalMinutes} min).`);
+  });
+
+  document.getElementById('interpreter-form')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const fullName = (document.getElementById('int-name') as HTMLInputElement).value.trim();
+    const accreditationCode = (document.getElementById('int-code') as HTMLInputElement).value.trim();
+    const validUntil = (document.getElementById('int-valid') as HTMLInputElement).value;
+    const availabilityDays = (document.getElementById('int-days') as HTMLInputElement).value.trim();
+    const timeWindow = (document.getElementById('int-window') as HTMLInputElement).value.trim();
+
+    if (!fullName || !accreditationCode || !validUntil) {
+      triggerVisualAlert('Ingresa nombre, código de acreditación LSEc y fecha de vigencia.');
+      return;
+    }
+
+    addInterpreter({
+      id: `int-${Date.now().toString(36)}`,
+      fullName,
+      accreditationCode,
+      validUntil,
+      availabilityDays: availabilityDays || 'Lunes a Viernes',
+      timeWindow: timeWindow || '08:00 - 16:00',
+      verified: true,
+    });
+    (e.target as HTMLFormElement).reset();
+    renderInterpreters();
+    triggerVisualAlert(`Intérprete LSEc ${fullName} acreditado correctamente (RF-11).`);
+  });
+
+  document.getElementById('reset-seeds-btn')?.addEventListener('click', () => {
+    resetPatientsSeed();
+    renderPatients();
+    triggerVisualAlert('Datos semilla de pacientes restaurados.');
+  });
+
+  renderPatients();
+  renderSchedules();
+  renderInterpreters();
+</script>

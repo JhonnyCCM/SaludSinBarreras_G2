@@ -730,3 +730,16 @@ kbd {
 .dashboard-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
 .stat { display: grid; gap: 0.1rem; padding: 0.75rem; border-radius: var(--radius); background: var(--surface-alt); text-align: center; }
 .stat strong { font-size: 1.6rem; }
+.reminder {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius);
+  border: 2px solid var(--border-subtle);
+  background: var(--bg);
+}
+.reminder.pendiente { border-color: var(--info-border); }
+.reminder.omitida { border-color: var(--danger-border); }

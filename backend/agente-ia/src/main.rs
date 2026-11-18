@@ -6,11 +6,16 @@
 //! - Segmentos para lector de pantalla / lectura en voz alta.
 //! - Canal en tiempo real por sala de videoconsulta.
 
+mod api;
 mod guardrails;
+mod tareas;
 
 use std::net::SocketAddr;
 
-use axum::{routing::get, Json, Router};
+use axum::{
+    routing::{get, post},
+    Json, Router,
+};
 use serde_json::{json, Value};
 use tower_http::cors::{Any, CorsLayer};
 
@@ -25,7 +30,10 @@ async fn salud() -> Json<Value> {
 
 pub fn app() -> Router {
     let cors = CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any);
-    Router::new().route("/salud", get(salud)).layer(cors)
+    Router::new()
+        .route("/salud", get(salud))
+        .route("/v1/tareas/{tarea}", post(api::ejecutar_tarea))
+        .layer(cors)
 }
 
 #[tokio::main]

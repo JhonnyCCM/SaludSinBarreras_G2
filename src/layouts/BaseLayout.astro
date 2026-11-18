@@ -1,5 +1,6 @@
 ---
 import AccessibilityMenu from '../components/AccessibilityMenu.astro';
+import SessionTimeout from '../components/SessionTimeout.astro';
 import '../styles/global.css';
 
 interface Props {
@@ -123,5 +124,6 @@ const isCurrent = (target: string) =>
         </div>
       </div>
     </footer>
+    <SessionTimeout />
   </body>
 </html>

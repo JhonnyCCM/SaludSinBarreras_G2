@@ -1,0 +1,61 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import VideoRoom from '../../components/VideoRoom.astro';
+---
+
+<BaseLayout title="Videoconsulta" section="paciente" description="Videoconsulta del paciente con verificación previa y apoyos activos (RF-03).">
+  <section class="card mb-3">
+    <span class="badge badge-info mb-1">T3-U1 · RF-03 · T4-U1 · RF-04</span>
+    <h1>Mi videoconsulta</h1>
+    <p class="form-hint" style="margin: 0;">Tus apoyos (subtítulos, intérprete, lectura en voz alta) se activan solos al entrar.</p>
+  </section>
+
+  <VideoRoom role="paciente" />
+
+  <section class="card mt-3" id="room-questions" aria-labelledby="t-rq" hidden>
+    <h2 id="t-rq">❓ Mis preguntas para esta consulta</h2>
+    <ul id="rq-list"></ul>
+    <form id="rq-form" class="flex-wrap" novalidate>
+      <label class="sr-only" for="rq-text">Nueva pregunta</label>
+      <input id="rq-text" class="form-control" style="flex: 1; min-width: 14rem;" placeholder="Escribe una pregunta para el médico" />
+      <button class="btn btn-primary" type="submit">Agregar pregunta</button>
+      <button class="btn btn-secondary" type="button" id="rq-raise">✋ Pedir la palabra</button>
+    </form>
+  </section>
+</BaseLayout>
+
+<script>
+  import { announce } from '../../lib/announce';
+  import { addQuestion, questionsOf } from '../../lib/data/consultation';
+  import { onDataChange } from '../../lib/data/db';
+  import { esc } from '../../lib/forms';
+
+  window.addEventListener('ssb:room-ready', (e) => {
+    const { appointmentId } = (e as CustomEvent<{ appointmentId: string }>).detail;
+    const box = document.getElementById('room-questions')!;
+    box.hidden = false;
+    const render = () => {
+      document.getElementById('rq-list')!.innerHTML =
+        questionsOf(appointmentId)
+          .map((q) => `<li>${esc(q.text)} ${q.answered ? '<span class="badge badge-success">Respondida</span>' : '<span class="badge badge-warning">Pendiente</span>'}</li>`)
+          .join('') || '<li class="form-hint">Aún no agregaste preguntas.</li>';
+    };
+    render();
+    onDataChange(render);
+    document.getElementById('rq-form')!.addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      const input = document.getElementById('rq-text') as HTMLInputElement;
+      if (!input.value.trim()) {
+        announce('Escribe la pregunta antes de agregarla.', 'assertive');
+        input.focus();
+        return;
+      }
+      addQuestion(appointmentId, input.value.trim(), 'texto');
+      input.value = '';
+      announce('Pregunta agregada. El médico la verá en su lista.');
+    });
+    document.getElementById('rq-raise')!.addEventListener('click', () =>
+      window.dispatchEvent(new CustomEvent('ssb:shortcut', { detail: { action: 'raiseHand' } }))
+    );
+  });
+</script>

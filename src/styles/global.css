@@ -671,3 +671,24 @@ kbd {
   .review-list { grid-template-columns: 1fr; }
   .review-list dd { margin-bottom: 0.5rem; }
 }
+
+/* Encabezado con sesión y pie de página */
+.header-tools { justify-content: flex-end; }
+.session-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  border: 2px solid var(--primary);
+  background: var(--surface-alt);
+  font-weight: 700;
+}
+.session-chip[hidden], #login-link[hidden], #logout-btn[hidden] { display: none; }
+.session-chip a { color: var(--text); text-decoration: none; }
+.footer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+.footer-links { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }

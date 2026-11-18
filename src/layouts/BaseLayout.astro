@@ -3,19 +3,60 @@ import AccessibilityMenu from '../components/AccessibilityMenu.astro';
 import SessionTimeout from '../components/SessionTimeout.astro';
 import '../styles/global.css';
 
+type Section = 'publico' | 'paciente' | 'profesional' | 'interprete';
+
 interface Props {
   title: string;
   description?: string;
+  section?: Section;
 }
 
 const {
   title,
-  description = 'Plataforma de telemedicina accesible con enfoque WCAG 2.2 y Harness de IA No Conversacional.',
+  description = 'Plataforma de telemedicina accesible para personas con discapacidad.',
+  section = 'publico',
 } = Astro.props;
 
-const pathname = Astro.url.pathname;
-const isCurrent = (target: string) =>
-  pathname === target || (target !== '/' && pathname.startsWith(target));
+const NAV: Record<Section, Array<{ href: string; label: string }>> = {
+  publico: [
+    { href: '/', label: '🏠 Inicio' },
+    { href: '/login', label: '🔑 Iniciar sesión' },
+    { href: '/paciente/registro', label: '📝 Registrarme como paciente' },
+  ],
+  paciente: [
+    { href: '/paciente', label: '🏠 Mi panel' },
+    { href: '/paciente/reservar', label: '📅 Reservar cita' },
+    { href: '/paciente/preguntas', label: '❓ Mis preguntas' },
+    { href: '/paciente/sala', label: '🎥 Videoconsulta' },
+    { href: '/paciente/indicaciones', label: '💊 Indicaciones' },
+    { href: '/paciente/recordatorios', label: '⏰ Recordatorios' },
+    { href: '/paciente/privacidad', label: '🔒 Privacidad' },
+  ],
+  profesional: [
+    { href: '/profesional', label: '📋 Agenda del día' },
+    { href: '/profesional/horario', label: '🗓️ Mi horario' },
+    { href: '/profesional/consulta', label: '🎥 Consulta' },
+    { href: '/profesional/resumen', label: '✍️ Resumen IA' },
+    { href: '/profesional/receta', label: '💊 Receta' },
+    { href: '/profesional/historia', label: '📁 Historia clínica' },
+    { href: '/profesional/seguimiento', label: '📈 Seguimiento' },
+  ],
+  interprete: [
+    { href: '/interprete', label: '📨 Solicitudes' },
+    { href: '/interprete/acreditacion', label: '🪪 Acreditación' },
+    { href: '/interprete/sesion', label: '🤟 Sesión de interpretación' },
+  ],
+};
+
+const SECTION_LABEL: Record<Section, string> = {
+  publico: 'Navegación principal',
+  paciente: 'Menú del paciente',
+  profesional: 'Menú del profesional de salud',
+  interprete: 'Menú del intérprete',
+};
+
+const pathname = Astro.url.pathname.replace(/\/$/, '') || '/';
+const isCurrent = (href: string) => pathname === href;
 ---
 
 <!doctype html>
@@ -25,7 +66,7 @@ const isCurrent = (target: string) =>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
     <title>{title} | SaludSinBarreras</title>
-    <!-- Inicialización instantánea de preferencias WCAG 2.2 para evitar parpadeo visual -->
+    <!-- Aplica las preferencias del menú F3 antes de pintar para evitar parpadeos -->
     <script is:inline>
       (function () {
         try {
@@ -50,7 +91,7 @@ const isCurrent = (target: string) =>
       })();
     </script>
   </head>
-  <body>
+  <body data-section={section}>
     <a class="skip-link" href="#contenido-principal">Saltar al contenido principal</a>
     <!-- Regiones vivas para mensajes de estado (F4 · WCAG 4.1.3) -->
     <div id="ssb-announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -65,44 +106,25 @@ const isCurrent = (target: string) =>
             <span class="brand-badge" aria-hidden="true">SB</span>
             <span>
               <span class="brand-title">SaludSinBarreras</span>
-              <span class="brand-subtitle">Telemedicina Inclusiva · WCAG 2.2 · IA No Conversacional</span>
+              <span class="brand-subtitle">Telemedicina accesible para personas con discapacidad</span>
             </span>
           </a>
 
-          <div class="flex-wrap">
-            <span class="badge badge-success">Prototipo Evaluación 19/11/2026</span>
+          <div class="flex-wrap header-tools">
+            <span id="session-chip" class="session-chip" hidden></span>
+            <a href="/login" class="btn btn-secondary" id="login-link">🔑 Iniciar sesión</a>
+            <button type="button" class="btn btn-secondary" id="logout-btn" hidden>Salir</button>
+            <!-- Ayuda consistente: siempre en el mismo lugar (F4 · WCAG 3.2.6) -->
+            <a href="/ayuda" class="btn btn-accent" aria-current={isCurrent('/ayuda') ? 'page' : undefined}>❔ Ayuda</a>
           </div>
         </div>
 
-        <nav class="main-nav" aria-label="Navegación principal">
-          <a
-            href="/"
-            class="nav-link"
-            aria-current={isCurrent('/') ? 'page' : undefined}
-          >
-            🏠 Inicio
-          </a>
-          <a
-            href="/registro-paciente"
-            class="nav-link"
-            aria-current={isCurrent('/registro-paciente') ? 'page' : undefined}
-          >
-            📝 Registro Discapacidad (RF-01)
-          </a>
-          <a
-            href="/usuarios-registrados"
-            class="nav-link"
-            aria-current={isCurrent('/usuarios-registrados') ? 'page' : undefined}
-          >
-            👥 Usuarios Registrados y Apoyos (RF-10)
-          </a>
-          <a
-            href="/ia-harness"
-            class="nav-link"
-            aria-current={isCurrent('/ia-harness') ? 'page' : undefined}
-          >
-            ⚙️ Harness IA No Conversacional (RF-14)
-          </a>
+        <nav class="main-nav" aria-label={SECTION_LABEL[section]}>
+          {NAV[section].map((item) => (
+            <a href={item.href} class="nav-link" aria-current={isCurrent(item.href) ? 'page' : undefined}>
+              {item.label}
+            </a>
+          ))}
         </nav>
       </div>
     </header>
@@ -114,16 +136,53 @@ const isCurrent = (target: string) =>
     </main>
 
     <footer class="site-footer">
-      <div class="container flex-wrap" style="justify-content: space-between;">
+      <div class="container footer-grid">
         <div>
-          <strong>SaludSinBarreras — Grupo 5 (ULEAM · Usabilidad y Accesibilidad 6A)</strong><br />
-          Integrantes: Elkin Delgado (Líder/Dev) · Jork Lucas (Analista) · Jhonny Castillo (QA/Dev Apoyo)
+          <strong>SaludSinBarreras — Grupo 5</strong><br />
+          ULEAM · Usabilidad y Accesibilidad<br />
+          Elkin Delgado Licoa · Jork Lucas Garcia · Jhonny Castillo Mero
         </div>
-        <div>
-          Componente IA estrictamente no conversacional: no diagnostica ni prescribe; requiere validación profesional (RF-14).
-        </div>
+        <nav aria-label="Enlaces del pie de página">
+          <ul class="footer-links">
+            <li><a href="/ayuda">Ayuda y atajos de teclado</a></li>
+            <li><a href="/trazabilidad">Trazabilidad F1–F4</a></li>
+            <li><a href="/ia-harness">Laboratorio del agente IA</a></li>
+          </ul>
+        </nav>
+        <p class="form-hint" style="margin: 0;">
+          El asistente de IA no conversa, no diagnostica y no receta: todo resumen lo firma el profesional de salud.
+        </p>
       </div>
     </footer>
     <SessionTimeout />
+
+    <script>
+      import { ROLE_HOME, ROLE_LABELS, endSession, getSession } from '../lib/session';
+
+      const chip = document.getElementById('session-chip') as HTMLElement;
+      const loginLink = document.getElementById('login-link') as HTMLElement;
+      const logoutBtn = document.getElementById('logout-btn') as HTMLButtonElement;
+
+      function render() {
+        const s = getSession();
+        chip.hidden = !s;
+        logoutBtn.hidden = !s;
+        loginLink.hidden = Boolean(s);
+        if (s) {
+          chip.innerHTML = '';
+          const a = document.createElement('a');
+          a.href = ROLE_HOME[s.role];
+          a.textContent = `${s.name} · ${ROLE_LABELS[s.role]}`;
+          chip.appendChild(a);
+        }
+      }
+
+      logoutBtn.addEventListener('click', () => {
+        endSession();
+        window.location.href = '/';
+      });
+      window.addEventListener('ssb:session-changed', render);
+      render();
+    </script>
   </body>
 </html>

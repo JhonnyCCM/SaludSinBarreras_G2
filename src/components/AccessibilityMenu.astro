@@ -42,7 +42,7 @@
     </div>
   </div>
 
-  <!-- Región de alertas visuales y lectores de pantalla (Criterio 1.4.1 / 4.1.3) -->
+  <!-- Región de alertas visuales y lectores de pantalla (Criterios 1.3.3 / 4.1.3) -->
   <div class="container">
     <div
       id="ssb-visual-alert-banner"
@@ -114,7 +114,7 @@
           </div>
 
           <div class="a11y-control-block mt-2">
-            <span class="form-label">Contraste y color (Criterios 1.4.3 y 1.4.11):</span>
+            <span class="form-label">Contraste y color (Criterios 1.4.3, 1.4.6 y 1.4.11):</span>
             <div class="flex-wrap mt-1" role="group" aria-label="Modos de contraste">
               <button type="button" class="btn btn-secondary" data-contrast-mode="standard">Estándar AA (4.5:1)</button>
               <button type="button" class="btn btn-secondary" data-contrast-mode="high">Alto Contraste (Negro/Amarillo)</button>
@@ -123,7 +123,7 @@
           </div>
         </fieldset>
 
-        <!-- Categoría Visual / Auditiva: Texto a Voz y Alertas -->
+        <!-- Categoría Visual / Cognitiva: Texto a Voz · Categoría Auditiva: Subtítulos y Alertas -->
         <fieldset class="a11y-fieldset">
           <legend>🔊 Voz (TTS) y Apoyo Auditivo</legend>
 
@@ -155,7 +155,7 @@
           <label class="check-card mt-1">
             <input type="checkbox" id="a11y-chk-visual-alerts" />
             <span class="check-card-body">
-              <strong>Alertas visuales + vibración en pantalla (Criterio 1.4.1)</strong>
+              <strong>Alertas visuales + vibración en pantalla (Criterio 1.3.3)</strong>
               <span class="form-hint">Avisos luminosos sin depender del sonido.</span>
             </span>
           </label>
@@ -172,7 +172,7 @@
           <label class="check-card">
             <input type="checkbox" id="a11y-chk-focus" />
             <span class="check-card-body">
-              <strong>Foco súper destacado (5px — Criterios 2.4.7 y 2.4.11)</strong>
+              <strong>Foco súper destacado (5px — Criterios 2.4.7, 2.4.11 y 2.4.13)</strong>
               <span class="form-hint">Resalta con borde grueso y halo el elemento activo para teclado o pulsadores.</span>
             </span>
           </label>
@@ -499,7 +499,7 @@
 
   document.getElementById('a11y-test-visual-alert')?.addEventListener('click', () => {
     triggerVisualAlert(
-      'Alerta multimodal de prueba (WCAG 1.4.1): aviso visual luminoso y vibración activos para llamadas o recordatorios.',
+      'Alerta multimodal de prueba (WCAG 1.3.3): aviso visual luminoso y vibración activos para llamadas o recordatorios.',
       { vibrate: true, speak: false }
     );
   });

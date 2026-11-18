@@ -4,12 +4,12 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
 <BaseLayout
   title="Usuarios Registrados, Ficha Clínica y Agenda"
-  description="Listado de pacientes registrados con información de discapacidad, ficha de apoyos para el profesional (RF-09), agenda médica con holgura LSEc (RF-08) y registro de intérpretes (RF-11)."
+  description="Listado de pacientes registrados con información de discapacidad, ficha de apoyos para el profesional (RF-10), agenda médica con holgura LSEc (RF-08) y registro de intérpretes (RF-18)."
 >
   <section class="card mb-3">
     <div class="flex-wrap" style="justify-content: space-between;">
       <div>
-        <span class="badge badge-info mb-1">Tareas T2-U2, T1-U2, T1-U3 · RF-08, RF-09, RF-11, RF-12</span>
+        <span class="badge badge-info mb-1">Tareas T3-U2, T1-U2, T1-U3 · RF-08, RF-10, RF-18, RF-19</span>
         <h1>Usuarios Registrados con Información de Discapacidad</h1>
         <p style="margin-bottom: 0;">
           Vista unificada para demostrar los perfiles registrados, su ficha clínica de accesibilidad
@@ -25,10 +25,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     </div>
   </section>
 
-  <!-- SECCIÓN A: Directorio y Ficha Clínica de Discapacidad (RF-09) -->
+  <!-- SECCIÓN A: Directorio y Ficha Clínica de Discapacidad (RF-10) -->
   <section class="card mb-3" aria-labelledby="titulo-directorio">
     <div class="flex-wrap" style="justify-content: space-between;">
-      <h2 id="titulo-directorio">A. Pacientes Registrados y Ficha de Apoyos (RF-09)</h2>
+      <h2 id="titulo-directorio">A. Pacientes Registrados y Ficha de Apoyos (RF-10)</h2>
       <span class="badge badge-success" id="patients-count-badge" aria-live="polite">Cargando...</span>
     </div>
 
@@ -46,7 +46,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     </div>
   </section>
 
-  <!-- SECCIÓN B: Disponibilidad del Profesional (RF-08) y Registro/Solicitudes de Intérprete LSEc (RF-11 / RF-12) -->
+  <!-- SECCIÓN B: Disponibilidad del Profesional (RF-08) y Registro/Solicitudes de Intérprete LSEc (RF-18 / RF-19) -->
   <div class="grid-2">
     <!-- Formulario Profesional RF-08 -->
     <section class="card" aria-labelledby="titulo-agenda-medica">
@@ -100,9 +100,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       <div id="schedules-list" class="mt-1"></div>
     </section>
 
-    <!-- Formulario Intérprete LSEc RF-11 y RF-12 -->
+    <!-- Formulario Intérprete LSEc RF-18 y RF-19 -->
     <section class="card" aria-labelledby="titulo-interpretes">
-      <span class="badge badge-info mb-1">Tareas T1-U3 y T2-U3 · RF-11 y RF-12</span>
+      <span class="badge badge-info mb-1">Tareas T1-U3 y T2-U3 · RF-18 y RF-19</span>
       <h2 id="titulo-interpretes">B2. Registro de Intérprete LSEc y Solicitudes</h2>
       <p class="form-hint">
         Acredita intérpretes de Lengua de Señas Ecuatoriana y confirma o rechaza asignaciones de citas en 1 clic.
@@ -136,7 +136,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         <button type="submit" class="btn btn-primary">🪪 Registrar Intérprete Acreditado</button>
       </form>
 
-      <h3 class="mt-3">Intérpretes y Bandeja de Solicitudes (RF-12)</h3>
+      <h3 class="mt-3">Intérpretes y Bandeja de Solicitudes (RF-19)</h3>
       <div id="interpreters-list" class="mt-1"></div>
     </section>
   </div>
@@ -284,7 +284,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         </p>
 
         <div class="alert-box" style="padding: 0.75rem;">
-          <strong>🤖 Ficha IA No Conversacional para el Profesional (RF-09):</strong>
+          <strong>🤖 Ficha IA No Conversacional para el Profesional (RF-10):</strong>
           <ul style="margin: 0.35rem 0 0 1.15rem; padding: 0;">
             ${brief.mandatorySupports.map((s) => `<li>${esc(s)}</li>`).join('')}
           </ul>
@@ -500,7 +500,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     });
     (e.target as HTMLFormElement).reset();
     renderInterpreters();
-    triggerVisualAlert(`Intérprete LSEc ${fullName} acreditado correctamente (RF-11).`);
+    triggerVisualAlert(`Intérprete LSEc ${fullName} acreditado correctamente (RF-18).`);
   });
 
   document.getElementById('reset-seeds-btn')?.addEventListener('click', () => {

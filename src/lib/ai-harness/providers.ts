@@ -97,7 +97,7 @@ function runDeterministicAccessibility(
     supports.add('Subtítulos automáticos en tiempo real activos al entrar a sala (RF-03).');
   }
   if (needsLsec) {
-    supports.add('Intérprete de Lengua de Señas Ecuatoriana (LSEc) en ventana fija y prioritaria (RF-04).');
+    supports.add('Intérprete de Lengua de Señas Ecuatoriana (LSEc) en ventana fija y prioritaria (F3 · WCAG 1.2.6).');
     checklist.add('Hablar de frente a la cámara, ritmo pausado y respetando turnos con el intérprete.');
     interpreterBriefing.push(
       `Paciente ${input.patientName} requiere interpretación LSEc continua.`,
@@ -138,7 +138,7 @@ function runDeterministicAccessibility(
     supports.add(`Recordatorios multimodales habilitados (${channels.join(' + ')}) (RF-06).`);
   }
 
-  checklist.add('Verificar que el borrador de indicaciones IA sea revisado y firmado antes de enviarlo (RF-10).');
+  checklist.add('Verificar que el borrador de indicaciones IA sea revisado y firmado antes de enviarlo (RF-14).');
 
   const extraMinutes = needsLsec ? 15 : hasCognitiva || hasHabla ? 10 : 0;
   const bandwidthRecommendation =

@@ -5,7 +5,7 @@ import type {
 } from './types';
 
 export const MEDICAL_AI_DISCLAIMER =
-  'Salida generada por componente de IA no conversacional de apoyo. No diagnostica ni prescribe. Todo resumen clínico requiere revisión y firma del profesional de salud (RF-10 / RNFU-05).';
+  'Salida generada por componente de IA no conversacional de apoyo. No diagnostica ni prescribe. Todo resumen clínico requiere revisión y firma del profesional de salud (RF-14 / RNFU-05).';
 
 const FORBIDDEN_CONVERSATIONAL_KEYS = new Set([
   'messages',
@@ -194,7 +194,7 @@ export function sanitizeResultData<T>(data: T): {
 
 /**
  * Sella y aprueba digitalmente un resultado generado por IA cuando requiere
- * validación del profesional de salud (RF-10 / RNFU-05).
+ * validación del profesional de salud (RF-14 / RNFU-05).
  */
 export function approveHarnessResult<T>(
   result: AIHarnessResult<T>,

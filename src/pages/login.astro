@@ -1,0 +1,156 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Iniciar sesión" description="Inicio de sesión accesible sin captcha (FORM-11, WCAG 3.3.8).">
+  <div class="page-narrow">
+    <div id="expired-note" class="alert-box warning mb-2" role="status" hidden>
+      <strong>Tu sesión expiró por inactividad.</strong> Lo que habías escrito se guardó: lo recuperarás al volver a entrar.
+    </div>
+
+    <section class="card">
+      <span class="badge badge-info mb-1">FORM-11 · WCAG 3.3.8 · 1.3.5</span>
+      <h1>Iniciar sesión</h1>
+      <p class="form-hint">Sin captcha ni pruebas de memoria. Puedes pegar tu contraseña o usar tu gestor de contraseñas.</p>
+
+      <div id="login-errors" class="error-summary" tabindex="-1" hidden></div>
+
+      <form id="login-form" novalidate>
+        <fieldset class="plain-fieldset">
+          <legend class="form-label">¿Cómo vas a ingresar? *</legend>
+          <div class="role-options">
+            <label class="check-card"><input type="radio" name="role" value="paciente" id="role-paciente" checked /> <span class="check-card-body"><strong>Paciente</strong><span class="form-hint">Usuario: tu cédula</span></span></label>
+            <label class="check-card"><input type="radio" name="role" value="profesional" id="role-profesional" /> <span class="check-card-body"><strong>Profesional de salud</strong><span class="form-hint">Usuario: tu registro MSP</span></span></label>
+            <label class="check-card"><input type="radio" name="role" value="interprete" id="role-interprete" /> <span class="check-card-body"><strong>Intérprete de señas</strong><span class="form-hint">Usuario: tu código de acreditación</span></span></label>
+          </div>
+        </fieldset>
+
+        <div class="form-group mt-2">
+          <label class="form-label" for="login-user">Usuario *</label>
+          <input class="form-control" id="login-user" name="username" autocomplete="username" aria-describedby="login-user-hint" />
+          <span class="form-hint" id="login-user-hint">Ejemplo: 1314567890</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="login-pass">Contraseña *</label>
+          <div class="flex-wrap">
+            <input class="form-control" style="flex: 1; min-width: 12rem;" id="login-pass" name="password" type="password" autocomplete="current-password" aria-describedby="login-pass-hint" />
+            <button type="button" class="btn btn-secondary" id="toggle-pass" aria-pressed="false" aria-controls="login-pass">👁️ Mostrar contraseña</button>
+          </div>
+          <span class="form-hint" id="login-pass-hint">En la demo la contraseña de todas las cuentas es <strong>salud2026</strong>.</span>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Entrar</button>
+        <p class="form-hint mt-2">¿Eres paciente y no tienes cuenta? <a href="/paciente/registro">Regístrate indicando tu discapacidad</a>.</p>
+      </form>
+    </section>
+
+    <section class="card mt-3" aria-labelledby="demo-title">
+      <h2 id="demo-title">Cuentas de prueba</h2>
+      <p class="form-hint">Para la presentación: entra con un clic como cualquiera de los tres perfiles del F1.</p>
+      <div id="demo-accounts" class="demo-accounts"></div>
+    </section>
+  </div>
+</BaseLayout>
+
+<style>
+  .page-narrow { max-width: 760px; margin-inline: auto; }
+  .plain-fieldset { border: none; padding: 0; margin: 0; }
+  .role-options { display: grid; gap: 0.5rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); margin-top: 0.4rem; }
+  .demo-accounts { display: grid; gap: 0.75rem; }
+  .demo-group h3 { font-size: 1rem; margin: 0.5rem 0 0.35rem; }
+  .demo-group ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.4rem; }
+  .demo-group li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.5rem 0.75rem; border: 1px solid var(--border-subtle); border-radius: var(--radius); background: var(--bg); }
+</style>
+
+<script>
+  import { announce } from '../lib/announce';
+  import { setFieldError, validateForm, rules, valueOf } from '../lib/forms';
+  import { ROLE_HOME, ROLE_LABELS, authenticate, demoAccounts, startSession, type Account, type Role } from '../lib/session';
+
+  const params = new URLSearchParams(location.search);
+  const form = document.getElementById('login-form') as HTMLFormElement;
+  const summary = document.getElementById('login-errors') as HTMLElement;
+  const userHint = document.getElementById('login-user-hint') as HTMLElement;
+
+  if (params.has('expirada')) (document.getElementById('expired-note') as HTMLElement).hidden = false;
+
+  const HINTS: Record<Role, string> = {
+    paciente: 'Tu cédula de 10 dígitos. Ejemplo: 1314567890',
+    profesional: 'Tu registro MSP. Ejemplo: MSP-130982',
+    interprete: 'Tu código de acreditación. Ejemplo: CONADIS-LSEC-0418',
+  };
+
+  const selectedRole = () => (form.querySelector<HTMLInputElement>('input[name="role"]:checked')?.value ?? 'paciente') as Role;
+  const syncHint = () => (userHint.textContent = HINTS[selectedRole()]);
+
+  const preset = params.get('rol') as Role | null;
+  if (preset && ROLE_HOME[preset]) (document.getElementById(`role-${preset}`) as HTMLInputElement).checked = true;
+  syncHint();
+  form.querySelectorAll('input[name="role"]').forEach((r) => r.addEventListener('change', syncHint));
+
+  function goHome(account: Pick<Account, 'role' | 'userId' | 'name'>) {
+    startSession(account);
+    announce(`Bienvenido, ${account.name}.`);
+    const next = params.get('next');
+    location.href = next && next.startsWith('/') ? next : ROLE_HOME[account.role];
+  }
+
+  const toggle = document.getElementById('toggle-pass') as HTMLButtonElement;
+  toggle.addEventListener('click', () => {
+    const input = document.getElementById('login-pass') as HTMLInputElement;
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    toggle.setAttribute('aria-pressed', String(show));
+    toggle.textContent = show ? '🙈 Ocultar contraseña' : '👁️ Mostrar contraseña';
+  });
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const ok = validateForm(
+      form,
+      [
+        { id: 'login-user', label: 'Usuario', check: rules.required('Escribe tu usuario: ' + HINTS[selectedRole()]) },
+        { id: 'login-pass', label: 'Contraseña', check: rules.required('Escribe tu contraseña. Puedes pegarla.') },
+      ],
+      summary
+    );
+    if (!ok) return;
+    const result = authenticate(selectedRole(), valueOf('login-user'), (document.getElementById('login-pass') as HTMLInputElement).value);
+    if ('error' in result) {
+      const field = document.getElementById(result.field === 'username' ? 'login-user' : 'login-pass')!;
+      setFieldError(field, result.error);
+      summary.innerHTML = `<h2 class="error-summary-title">No pudimos iniciar sesión</h2><p><a href="#${field.id}">${result.error}</a></p>`;
+      summary.hidden = false;
+      summary.focus();
+      announce(result.error, 'assertive');
+      return;
+    }
+    goHome(result);
+  });
+
+  // Cuentas de prueba agrupadas por rol
+  const container = document.getElementById('demo-accounts')!;
+  (['profesional', 'paciente', 'interprete'] as Role[]).forEach((role) => {
+    const group = document.createElement('div');
+    group.className = 'demo-group';
+    group.innerHTML = `<h3>${ROLE_LABELS[role]}</h3><ul></ul>`;
+    const ul = group.querySelector('ul')!;
+    demoAccounts()
+      .filter((a) => a.role === role)
+      .forEach((a) => {
+        const li = document.createElement('li');
+        li.innerHTML = `<span><strong></strong><br /><span class="form-hint"></span></span>`;
+        li.querySelector('strong')!.textContent = a.name;
+        li.querySelector('.form-hint')!.textContent = `${a.detail} · usuario ${a.username}`;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-secondary';
+        btn.textContent = `Entrar como ${a.name.split(' ').slice(0, 2).join(' ')}`;
+        btn.addEventListener('click', () => goHome(a));
+        li.appendChild(btn);
+        ul.appendChild(li);
+      });
+    container.appendChild(group);
+  });
+</script>

@@ -1,0 +1,131 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import VideoRoom from '../../components/VideoRoom.astro';
+---
+
+<BaseLayout title="Sesión de interpretación" section="interprete" description="Sesión de interpretación con guía de encuadre, turnos, incidencias y cierre confidencial (RF-21 a RF-24).">
+  <section class="card mb-3">
+    <span class="badge badge-info mb-1">T4-U3 · RF-21 · T5-U3 · RF-22 · T6-U3 · RF-23 · T7-U3 · RF-24</span>
+    <h1>Sesión de interpretación</h1>
+    <p class="form-hint" style="margin: 0;">Verifica tu encuadre: manos, rostro y torso dentro de la guía amarilla, con luz frontal y fondo liso.</p>
+  </section>
+
+  <VideoRoom role="interprete" />
+
+  <div class="dashboard-grid mt-3" id="after-room" hidden>
+    <section class="card" aria-labelledby="t-inc">
+      <h2 id="t-inc">⚠️ Reportar una incidencia</h2>
+      <div id="inc-errors" class="error-summary" tabindex="-1" hidden></div>
+      <form id="inc-form" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="inc-cat">Tipo de problema *</label>
+          <select id="inc-cat" class="form-control">
+            <option value="">Elige el tipo</option>
+            <option value="video">Video (imagen congelada o borrosa)</option>
+            <option value="audio">Audio</option>
+            <option value="conexion">Conexión</option>
+            <option value="plataforma">Plataforma</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="inc-desc">¿Qué pasó? *</label>
+          <textarea id="inc-desc" class="form-control" rows="3" aria-describedby="inc-desc-hint"></textarea>
+          <span class="form-hint" id="inc-desc-hint">Ejemplo: el video se congeló 2 minutos y perdí parte de la explicación.</span>
+        </div>
+        <button type="submit" class="btn btn-secondary">Enviar incidencia</button>
+      </form>
+      <ul id="inc-list" class="inc-list"></ul>
+    </section>
+
+    <section class="card" aria-labelledby="t-close">
+      <h2 id="t-close">🔒 Cerrar el servicio</h2>
+      <p>Duración de la sesión: <strong id="close-minutes">0</strong> minutos.</p>
+      <div id="close-errors" class="error-summary" tabindex="-1" hidden></div>
+      <form id="close-form" novalidate>
+        <label class="check-card">
+          <input type="checkbox" id="close-conf" />
+          <span class="check-card-body">
+            <strong>Declaro que mantendré la confidencialidad de la consulta *</strong>
+            <span class="form-hint">No guardé notas ni datos del paciente fuera de la plataforma.</span>
+          </span>
+        </label>
+        <button type="submit" class="btn btn-primary mt-2">Cerrar servicio</button>
+      </form>
+    </section>
+  </div>
+</BaseLayout>
+
+<style is:global>
+  #after-room[hidden] { display: none; }
+  .inc-list { list-style: none; padding: 0; margin: 0.75rem 0 0; display: grid; gap: 0.4rem; }
+  .inc-list li { padding: 0.5rem 0.7rem; border: 1px solid var(--border-subtle); border-radius: var(--radius); background: var(--bg); }
+</style>
+
+<script>
+  import { announce } from '../../lib/announce';
+  import { formatDateTime } from '../../lib/data/db';
+  import { closeService, closures, incidents, reportIncident, type Incident } from '../../lib/data/records';
+  import { esc, rules, validateForm, valueOf } from '../../lib/forms';
+  import { confirmReview } from '../../lib/review';
+  import { getSession } from '../../lib/session';
+
+  const CATEGORY: Record<Incident['category'], string> = { video: 'Video', audio: 'Audio', conexion: 'Conexión', plataforma: 'Plataforma', otro: 'Otro' };
+
+  window.addEventListener('ssb:room-ready', (e) => {
+    const { appointmentId } = (e as CustomEvent<{ appointmentId: string }>).detail;
+    const session = getSession()!;
+    const started = Date.now();
+    document.getElementById('after-room')!.hidden = false;
+    const minutesEl = document.getElementById('close-minutes')!;
+    const minutes = () => Math.max(1, Math.round((Date.now() - started) / 60000));
+    window.setInterval(() => (minutesEl.textContent = String(minutes())), 15000);
+    minutesEl.textContent = '1';
+
+    const renderIncidents = () => {
+      document.getElementById('inc-list')!.innerHTML = incidents
+        .where((i) => i.appointmentId === appointmentId)
+        .map((i) => `<li><strong>${esc(CATEGORY[i.category])}</strong>: ${esc(i.description)} <span class="form-hint">${esc(formatDateTime(i.createdAt))}</span></li>`)
+        .join('');
+    };
+    renderIncidents();
+
+    const incForm = document.getElementById('inc-form') as HTMLFormElement;
+    incForm.addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      const ok = validateForm(
+        incForm,
+        [
+          { id: 'inc-cat', label: 'Tipo de problema', check: rules.required('Elige el tipo de problema.') },
+          { id: 'inc-desc', label: 'Descripción', check: rules.minLength(10, 'Cuenta brevemente qué pasó (al menos 10 letras).') },
+        ],
+        document.getElementById('inc-errors')
+      );
+      if (!ok) return;
+      reportIncident({ appointmentId, interpreterId: session.userId, category: valueOf('inc-cat') as Incident['category'], description: valueOf('inc-desc') });
+      incForm.reset();
+      renderIncidents();
+      announce('Incidencia enviada a soporte.');
+    });
+
+    const closeForm = document.getElementById('close-form') as HTMLFormElement;
+    if (closures.get(appointmentId)) {
+      closeForm.innerHTML = '<p class="alert-box success">Este servicio ya fue cerrado.</p>';
+    }
+    closeForm.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const ok = validateForm(closeForm, [{ id: 'close-conf', label: 'Confidencialidad', check: rules.checked('Acepta la declaración de confidencialidad para cerrar el servicio.') }], document.getElementById('close-errors'));
+      if (!ok) return;
+      const confirmed = await confirmReview({
+        title: '¿Cerrar el servicio de interpretación?',
+        items: [['Duración registrada', `${minutes()} minutos`], ['Incidencias reportadas', String(incidents.where((i) => i.appointmentId === appointmentId).length)]],
+        confirmLabel: 'Cerrar servicio',
+      });
+      if (!confirmed) return;
+      closeService(appointmentId, session.userId, minutes());
+      window.dispatchEvent(new Event('pagehide'));
+      announce('Servicio cerrado. Gracias.');
+      location.href = '/interprete';
+    });
+  });
+</script>

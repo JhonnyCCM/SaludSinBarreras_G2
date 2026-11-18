@@ -405,8 +405,19 @@ fn pictograma(linea: &str) -> &'static str {
     }
 }
 
+static PREFIJO_TRANSCRIPCION: LazyLock<Regex> = LazyLock::new(|| re(r"(?m)^\s*(\[[^\]]*\]\s*)?[^:\n]{2,60}:\s*"));
+
+/// Las notas del profesional son la fuente principal; la transcripción solo se usa si no hay notas,
+/// sin los prefijos "[hora] Hablante:" para no confundir nombres con medicamentos.
+fn fuente_resumen(e: &EntradaResumen) -> String {
+    if !e.clinical_notes.trim().is_empty() {
+        return e.clinical_notes.clone();
+    }
+    PREFIJO_TRANSCRIPCION.replace_all(&e.transcript_text, "").into_owned()
+}
+
 pub fn resumir_indicaciones(e: &EntradaResumen) -> SalidaResumen {
-    let fuente = format!("{}\n{}", e.clinical_notes, e.transcript_text);
+    let fuente = fuente_resumen(e);
     let lineas: Vec<String> = SEPARADOR_LINEAS
         .split(fuente.trim())
         .map(|l| l.trim().trim_end_matches('.').to_string())
@@ -568,5 +579,27 @@ mod pruebas {
         assert_eq!(s.medications[0].duration, "por 30 días");
         assert_eq!(s.warning_signs.len(), 1);
         assert!(s.next_follow_up.contains("15 días"));
+    }
+
+    #[test]
+    fn la_transcripcion_no_agrega_nombres_como_medicamentos() {
+        let s = resumir_indicaciones(&EntradaResumen {
+            doctor_name: "Dra. Viteri".into(),
+            patient_name: "Carlos".into(),
+            consultation_date: "2026-11-19".into(),
+            clinical_notes: "Losartan 50 mg cada 24 horas.".into(),
+            transcript_text: "[10:02] Dra. Valeria Viteri: siga con losartán 50 mg cada mañana.".into(),
+            target_format: FormatoObjetivo { easy_read: true, include_audio_script: false, include_pictograms: true },
+        });
+        assert_eq!(s.medications.len(), 1);
+        let solo_transcripcion = resumir_indicaciones(&EntradaResumen {
+            doctor_name: "Dra. Viteri".into(),
+            patient_name: "Carlos".into(),
+            consultation_date: "2026-11-19".into(),
+            clinical_notes: String::new(),
+            transcript_text: "[10:02] Dra. Valeria Viteri: tome paracetamol 500 mg cada 8 horas.".into(),
+            target_format: FormatoObjetivo { easy_read: true, include_audio_script: false, include_pictograms: true },
+        });
+        assert_eq!(solo_transcripcion.medications[0].name, "tome paracetamol 500 mg cada 8 horas");
     }
 }

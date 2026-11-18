@@ -119,7 +119,14 @@ pub fn sanear_valor(v: Value) -> (Value, Vec<String>) {
         }
     }
     let limpio = recorrer(v, &mut bloqueadas);
-    (limpio, bloqueadas)
+    // La misma frase puede aparecer en el resumen, el guion de audio y la transcripción: se reporta una vez.
+    let mut unicas: Vec<String> = Vec::new();
+    for b in bloqueadas {
+        if !unicas.contains(&b) {
+            unicas.push(b);
+        }
+    }
+    (limpio, unicas)
 }
 
 #[cfg(test)]
@@ -155,8 +162,8 @@ mod pruebas {
 
     #[test]
     fn sanea_estructuras_anidadas() {
-        let (v, b) = sanear_valor(json!({"a": ["Le receto doble dosis", "ok"]}));
-        assert_eq!(b.len(), 1);
+        let (v, b) = sanear_valor(json!({"a": ["Le receto doble dosis", "ok"], "b": "Le receto doble dosis"}));
+        assert_eq!(b.len(), 1, "las frases repetidas se reportan una vez");
         assert_eq!(v["a"][1], "ok");
     }
 }

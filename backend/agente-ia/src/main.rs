@@ -8,6 +8,7 @@
 
 mod api;
 mod guardrails;
+mod lector;
 mod senas;
 mod tareas;
 

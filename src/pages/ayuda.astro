@@ -1,0 +1,102 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { SHORTCUT_DEFS, shortcutLabel } from '../lib/shortcuts';
+---
+
+<BaseLayout title="Ayuda" description="Ayuda, atajos de teclado y contacto de SaludSinBarreras (WCAG 3.2.6).">
+  <section class="card mb-3">
+    <span class="badge badge-info mb-1">WCAG 3.2.6 Ayuda consistente</span>
+    <h1>Ayuda</h1>
+    <p>Este enlace aparece siempre en la parte superior derecha de todas las pantallas.</p>
+    <ul>
+      <li><a href="#menu">Cómo usar el menú de accesibilidad</a></li>
+      <li><a href="#atajos">Atajos de teclado</a></li>
+      <li><a href="#sesion">Tiempo de sesión y borradores</a></li>
+      <li><a href="#contacto">Contacto y soporte</a></li>
+    </ul>
+  </section>
+
+  <section class="card mb-3" id="menu" aria-labelledby="t-menu">
+    <h2 id="t-menu">Cómo usar el menú de accesibilidad</h2>
+    <ol>
+      <li>Pulsa <strong>♿ Menú de accesibilidad</strong> arriba o usa <kbd>Alt+Shift+A</kbd>.</li>
+      <li>Elige las opciones por categoría: visual, auditiva, motriz o cognitiva.</li>
+      <li>Los cambios se aplican al momento y se guardan en tu dispositivo.</li>
+      <li>Si te registras indicando tu discapacidad, las opciones que te corresponden se activan solas.</li>
+    </ol>
+  </section>
+
+  <section class="card mb-3" id="atajos" aria-labelledby="t-atajos">
+    <h2 id="t-atajos">Atajos de teclado</h2>
+    <p class="form-hint">Puedes cambiar las teclas o desactivar los atajos en Menú de accesibilidad › Motriz.</p>
+    <div class="table-scroll">
+      <table class="data-table">
+        <caption class="sr-only">Atajos de teclado</caption>
+        <thead><tr><th scope="col">Atajo</th><th scope="col">Acción</th><th scope="col">Dónde funciona</th></tr></thead>
+        <tbody>
+          {SHORTCUT_DEFS.map((d) => (
+            <tr><td><kbd data-shortcut-cell={d.action}>{shortcutLabel(d.code)}</kbd></td><td>{d.label}</td><td>{d.scope}</td></tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card mb-3" id="sesion" aria-labelledby="t-sesion">
+    <h2 id="t-sesion">Tiempo de sesión y borradores</h2>
+    <p>
+      La sesión se cierra tras 10 minutos sin actividad (20 minutos si tienes el apoyo de tiempo ampliado).
+      Dos minutos antes te avisamos y puedes ampliar el tiempo con un solo botón. Lo que escribas en los formularios
+      se guarda como borrador y lo recuperas al volver a entrar.
+    </p>
+    <button type="button" class="btn btn-secondary" id="demo-timeout-btn">⏱️ Probar el aviso de sesión (aparece en 30 s)</button>
+    <p class="form-hint">Necesitas haber iniciado sesión para ver el aviso.</p>
+  </section>
+
+  <section class="card" id="contacto" aria-labelledby="t-contacto">
+    <h2 id="t-contacto">Contacto y soporte</h2>
+    <ul>
+      <li>Soporte técnico: <a href="mailto:soporte@saludsinbarreras.ec">soporte@saludsinbarreras.ec</a></li>
+      <li>Mensaje de texto o videollamada en señas: lunes a viernes de 08:00 a 18:00.</li>
+    </ul>
+    <details class="mt-2">
+      <summary class="touch-target summary-btn">Opciones de la demostración</summary>
+      <p class="form-hint">Vuelve a los datos de ejemplo (citas, recetas, solicitudes) para repetir la presentación.</p>
+      <button type="button" class="btn btn-danger" id="reset-demo-btn">↺ Restablecer datos de demostración</button>
+    </details>
+  </section>
+</BaseLayout>
+
+<style>
+  .table-scroll { overflow-x: auto; }
+</style>
+
+<script>
+  import { announce } from '../lib/announce';
+  import { triggerVisualAlert } from '../lib/accessibility';
+  import { resetAllData } from '../lib/data/db';
+  import { confirmReview } from '../lib/review';
+  import { loadShortcutCodes, shortcutLabel, type ShortcutAction } from '../lib/shortcuts';
+
+  const codes = loadShortcutCodes();
+  document.querySelectorAll<HTMLElement>('[data-shortcut-cell]').forEach((el) => {
+    el.textContent = shortcutLabel(codes[el.dataset.shortcutCell as ShortcutAction]);
+  });
+
+  document.getElementById('demo-timeout-btn')?.addEventListener('click', () => {
+    window.dispatchEvent(new CustomEvent('ssb:demo-timeout'));
+  });
+
+  document.getElementById('reset-demo-btn')?.addEventListener('click', async () => {
+    const ok = await confirmReview({
+      title: '¿Restablecer los datos de demostración?',
+      items: [['Se borrarán', 'Citas, recetas, preguntas, solicitudes y registros creados en este navegador']],
+      confirmLabel: 'Sí, restablecer',
+      warning: 'Tus ajustes del menú de accesibilidad se mantienen.',
+    });
+    if (!ok) return;
+    resetAllData();
+    triggerVisualAlert('Datos de demostración restablecidos.');
+    announce('Datos de demostración restablecidos.');
+  });
+</script>

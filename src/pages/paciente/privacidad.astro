@@ -82,16 +82,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         URL.revokeObjectURL(url);
       } else {
         // PDF accesible: documento HTML semántico (idioma, título, encabezados, lista) que el navegador guarda como PDF.
-        const w = window.open('', '_blank');
-        if (!w) return announce('Permite las ventanas emergentes para generar el PDF.', 'assertive');
         const lines = (transcripts.get(aptId)?.lines ?? []).map((l) => `<li><strong>${esc(l.speaker)}:</strong> ${esc(l.text)}</li>`).join('');
-        w.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Transcripción ${esc(a.date)}</title>
+        const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Transcripción ${esc(a.date)}</title>
           <style>body{font:16px/1.6 Verdana,Arial,sans-serif;margin:2rem;color:#111}h1{font-size:1.4rem}li{margin-bottom:.4rem}</style></head>
           <body><h1>Transcripción de consulta</h1><p>${esc(formatDate(a.date))} a las ${esc(a.time)} · ${esc(a.specialty)}<br>Paciente: ${esc(session!.name)} · Profesional: ${esc(prof)}</p>
-          <h2>Conversación</h2><ol>${lines}</ol></body></html>`);
-        w.document.close();
-        w.focus();
-        w.print();
+          <h2>Conversación</h2><ol>${lines}</ol><script>window.addEventListener('load',()=>print())<\/script></body></html>`;
+        const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+        if (!window.open(url, '_blank')) return announce('Permite las ventanas emergentes para generar el PDF.', 'assertive');
+        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
       }
       announce('Descarga lista.');
     }

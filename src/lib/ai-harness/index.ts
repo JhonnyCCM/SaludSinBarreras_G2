@@ -10,6 +10,7 @@ import {
   callExternalNonConversationalProvider,
   resolveRuntimeConfig,
   runDeterministicFallback,
+  takeAgentBlockedClaims,
 } from './providers';
 import type {
   AIHarnessConfig,
@@ -72,7 +73,11 @@ export async function executeAIHarnessTask<K extends AITaskType>(
   }
 
   // 3. Sanitización de guardrails médicos (sin diagnóstico autónomo ni prescripción sin firma)
-  const { data: sanitizedData, blockedDiagnosticClaims } = sanitizeResultData(rawData);
+  const sanitized = sanitizeResultData(rawData);
+  const sanitizedData = sanitized.data;
+  // Si respondió el agente Rust, sus frases bloqueadas se suman a las del guardrail local (sin repetir).
+  const agentClaims = activeProvider === 'rust-agente' ? takeAgentBlockedClaims() : [];
+  const blockedDiagnosticClaims = [...new Set([...agentClaims, ...sanitized.blockedDiagnosticClaims])];
 
   const requiresProfessionalApproval = taskType === 'SUMMARIZE_MEDICAL_INDICATIONS';
   const initialApprovalStatus: ApprovalStatus = requiresProfessionalApproval

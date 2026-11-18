@@ -41,6 +41,14 @@ const TASK_PATHS: Record<AITaskType, string> = {
 /** Si el agente no responde, se evita reintentar durante 30 s para no demorar la interfaz. */
 let agentDownUntil = 0;
 
+/** Frases que el guardrail del agente Rust bloqueó en la última respuesta (los datos ya llegan saneados). */
+let lastAgentBlockedClaims: string[] = [];
+export function takeAgentBlockedClaims(): string[] {
+  const claims = lastAgentBlockedClaims;
+  lastAgentBlockedClaims = [];
+  return claims;
+}
+
 export function resolveRuntimeConfig(overrides?: AIHarnessConfig): Required<AIHarnessConfig> {
   const envProvider = readEnv('PUBLIC_AI_PROVIDER') as AIProviderName | '';
   // Por defecto se usa el agente Rust; si no está encendido, el harness cae al motor local.
@@ -261,7 +269,10 @@ function runDeterministicQuestions(
 function runDeterministicSummary(
   input: SummarizeMedicalIndicationsInput
 ): SummarizeMedicalIndicationsOutput {
-  const combinedSource = `${input.clinicalNotes}\n${input.transcriptText}`.trim();
+  // Igual que el agente Rust: las notas mandan; la transcripción solo si no hay notas y sin "[hora] Hablante:".
+  const combinedSource = (
+    input.clinicalNotes.trim() ? input.clinicalNotes : input.transcriptText.replace(/^\s*(\[[^\]]*\]\s*)?[^:\n]{2,60}:\s*/gm, '')
+  ).trim();
   const lines = combinedSource
     .split(/[\n.;]+/)
     .map((l) => l.trim())
@@ -414,8 +425,9 @@ export async function callExternalNonConversationalProvider<K extends AITaskType
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(input),
         });
-        const json = (await res.json()) as { data?: TaskOutputMap[K]; error?: string };
+        const json = (await res.json()) as { data?: TaskOutputMap[K]; error?: string; guardrails?: { blockedDiagnosticClaims?: string[] } };
         if (!res.ok || !json.data) throw new Error(json.error || `Agente Rust HTTP ${res.status}`);
+        lastAgentBlockedClaims = json.guardrails?.blockedDiagnosticClaims ?? [];
         return json.data;
       } catch (err) {
         if (!(err instanceof Error && err.message.startsWith('Agente Rust HTTP'))) agentDownUntil = Date.now() + 30_000;

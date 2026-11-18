@@ -75,10 +75,11 @@ export function a11yPatchFromSupports(supports: SupportKey[]): Partial<Accessibi
     fontScale: has('fontLarge') ? 1.5 : 1,
     contrast: has('highContrast') ? 'high' : 'standard',
     focusEnhanced: has('focusEnhanced'),
-    subtitlesDefault: has('subtitles') || !supports.length,
+    // Subtítulos y avisos visuales quedan activos para todos (valores por defecto del menú).
+    subtitlesDefault: true,
     showTranscript: has('transcript'),
     pinInterpreter: has('interpreter'),
-    visualAlerts: has('visualAlerts') || !supports.length,
+    visualAlerts: true,
     shortcutsEnabled: true,
     largeTargets: has('largeTargets'),
     extendedTime: has('extendedTime'),

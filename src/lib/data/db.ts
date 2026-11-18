@@ -28,6 +28,7 @@ export function collection<T extends Entity>(name: string, seed: () => T[]) {
     }
     const initial = seed();
     write(initial, false);
+    markSeeded();
     return initial;
   };
 
@@ -68,6 +69,27 @@ export function collection<T extends Entity>(name: string, seed: () => T[]) {
       write(seed());
     },
   };
+}
+
+// ---------- Antigüedad de los datos de ejemplo ----------
+const META_KEY = `${PREFIX}_sembrado`;
+
+function markSeeded(): void {
+  try {
+    if (!window.localStorage.getItem(META_KEY)) window.localStorage.setItem(META_KEY, isoDate(0));
+  } catch {
+    /* sin almacenamiento */
+  }
+}
+
+/** Fecha en que se sembraron los datos de ejemplo si no es hoy (las citas de ejemplo son relativas a ese día). */
+export function staleSeedDate(): string | null {
+  try {
+    const d = window.localStorage.getItem(META_KEY);
+    return d && d !== isoDate(0) ? d : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Ejecuta `cb` cuando cambian datos en esta pestaña o en otra. */

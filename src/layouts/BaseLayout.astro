@@ -131,6 +131,10 @@ const isCurrent = (href: string) => pathname === href;
 
     <main id="contenido-principal" tabindex="-1">
       <div class="container">
+        <div id="stale-data" class="alert-box warning mb-2" role="status" hidden>
+          <span id="stale-data-text"></span>
+          <button type="button" class="btn btn-secondary" id="stale-data-btn">Actualizar datos de ejemplo</button>
+        </div>
         <slot />
       </div>
     </main>
@@ -157,7 +161,20 @@ const isCurrent = (href: string) => pathname === href;
     <SessionTimeout />
 
     <script>
+      import { formatDate, resetAllData, staleSeedDate } from '../lib/data/db';
       import { ROLE_HOME, ROLE_LABELS, endSession, getSession } from '../lib/session';
+
+      // Las citas de ejemplo son relativas al día en que se sembraron: si cambió el día, se ofrece actualizarlas.
+      const stale = staleSeedDate();
+      if (stale) {
+        const box = document.getElementById('stale-data') as HTMLElement;
+        box.hidden = false;
+        document.getElementById('stale-data-text')!.textContent = `Los datos de ejemplo se crearon el ${formatDate(stale)}; por eso la agenda de hoy puede verse vacía. `;
+        document.getElementById('stale-data-btn')!.addEventListener('click', () => {
+          resetAllData();
+          location.reload();
+        });
+      }
 
       const chip = document.getElementById('session-chip') as HTMLElement;
       const loginLink = document.getElementById('login-link') as HTMLElement;

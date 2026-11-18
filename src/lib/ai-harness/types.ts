@@ -9,6 +9,7 @@ export type AITaskType =
   | 'SUMMARIZE_MEDICAL_INDICATIONS';
 
 export type AIProviderName =
+  | 'rust-agente'
   | 'gemini'
   | 'openai'
   | 'ollama'

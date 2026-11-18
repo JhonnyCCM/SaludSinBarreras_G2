@@ -27,17 +27,31 @@ function readEnv(key: string): string {
   return '';
 }
 
+/** URL del agente Rust no conversacional (backend/agente-ia). */
+export function agentBaseUrl(): string {
+  return (readEnv('PUBLIC_AGENTE_URL') || 'http://127.0.0.1:8787').replace(/\/$/, '');
+}
+
+const TASK_PATHS: Record<AITaskType, string> = {
+  ANALYZE_ACCESSIBILITY_NEEDS: 'analizar-necesidades',
+  ORGANIZE_PATIENT_QUESTIONS: 'organizar-preguntas',
+  SUMMARIZE_MEDICAL_INDICATIONS: 'resumir-indicaciones',
+};
+
+/** Si el agente no responde, se evita reintentar durante 30 s para no demorar la interfaz. */
+let agentDownUntil = 0;
+
 export function resolveRuntimeConfig(overrides?: AIHarnessConfig): Required<AIHarnessConfig> {
   const envProvider = readEnv('PUBLIC_AI_PROVIDER') as AIProviderName | '';
-  const provider: AIProviderName =
-    overrides?.provider || envProvider || 'local-deterministic-fallback';
+  // Por defecto se usa el agente Rust; si no está encendido, el harness cae al motor local.
+  const provider: AIProviderName = overrides?.provider || envProvider || 'rust-agente';
 
   return {
     provider,
     apiUrl: overrides?.apiUrl || readEnv('PUBLIC_AI_API_URL'),
     model: overrides?.model || readEnv('PUBLIC_AI_MODEL') || defaultModelFor(provider),
     apiKey: overrides?.apiKey || readEnv('PUBLIC_AI_API_KEY') || readEnv('AI_API_KEY'),
-    timeoutMs: overrides?.timeoutMs ?? 12000,
+    timeoutMs: overrides?.timeoutMs ?? (provider === 'rust-agente' ? 2500 : 12000),
     fallbackOnError: overrides?.fallbackOnError ?? true,
   };
 }
@@ -50,6 +64,8 @@ function defaultModelFor(provider: AIProviderName): string {
       return 'gpt-4o-mini';
     case 'ollama':
       return 'llama3.1';
+    case 'rust-agente':
+      return 'agente-rust-determinista-v1';
     default:
       return 'deterministic-v1';
   }
@@ -389,6 +405,24 @@ export async function callExternalNonConversationalProvider<K extends AITaskType
   });
 
   try {
+    if (config.provider === 'rust-agente') {
+      if (Date.now() < agentDownUntil) throw new Error('Agente Rust no disponible (reintento en unos segundos).');
+      try {
+        const res = await fetch(`${config.apiUrl || agentBaseUrl()}/v1/tareas/${TASK_PATHS[taskType]}`, {
+          method: 'POST',
+          signal: controller.signal,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+        });
+        const json = (await res.json()) as { data?: TaskOutputMap[K]; error?: string };
+        if (!res.ok || !json.data) throw new Error(json.error || `Agente Rust HTTP ${res.status}`);
+        return json.data;
+      } catch (err) {
+        if (!(err instanceof Error && err.message.startsWith('Agente Rust HTTP'))) agentDownUntil = Date.now() + 30_000;
+        throw err;
+      }
+    }
+
     if (config.provider === 'gemini') {
       if (!config.apiKey) {
         throw new Error('Falta API key para proveedor Gemini.');

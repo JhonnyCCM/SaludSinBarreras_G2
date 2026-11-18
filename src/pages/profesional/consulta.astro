@@ -1,0 +1,130 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import VideoRoom from '../../components/VideoRoom.astro';
+---
+
+<BaseLayout title="Consulta" section="profesional" description="Videoconsulta del profesional con participantes, apoyos y preguntas ordenadas por IA (RF-12, RF-13).">
+  <section class="card mb-3">
+    <span class="badge badge-info mb-1">T5-U2 · RF-12 · T6-U2 · RF-13</span>
+    <h1>Consulta</h1>
+    <p class="form-hint" style="margin: 0;">Verifica que el intérprete y los subtítulos estén activos antes de empezar.</p>
+  </section>
+
+  <VideoRoom role="profesional" />
+
+  <section class="card mt-3" id="q-panel" aria-labelledby="t-q" hidden>
+    <div class="flex-wrap" style="justify-content: space-between;">
+      <h2 id="t-q" style="margin: 0;">❓ Preguntas del paciente</h2>
+      <button type="button" class="btn btn-accent" id="q-organize">🤖 Ordenar por prioridad con IA</button>
+    </div>
+    <p class="form-hint" id="q-provider"></p>
+    <ol id="q-list" class="q-pro-list"></ol>
+    <label class="check-card mt-2">
+      <input type="checkbox" id="q-understood" />
+      <span class="check-card-body"><strong>El paciente confirmó que entendió las respuestas</strong><span class="form-hint">Pregúntaselo en su modalidad (señas, texto o voz) antes de marcar.</span></span>
+    </label>
+    <div class="flex-wrap mt-2">
+      <button type="button" class="btn btn-primary" id="finish">✅ Finalizar consulta y preparar resumen</button>
+    </div>
+  </section>
+</BaseLayout>
+
+<style is:global>
+  .q-pro-list { padding-left: 1.4rem; display: grid; gap: 0.5rem; }
+  .q-pro-list li { padding: 0.5rem 0.75rem; border: 1px solid var(--border-subtle); border-radius: var(--radius); background: var(--bg); }
+  .q-pro-list li.done { opacity: 0.8; text-decoration: line-through; }
+  .q-pro-list label { display: flex; gap: 0.6rem; align-items: flex-start; cursor: pointer; }
+</style>
+
+<script>
+  import { announce } from '../../lib/announce';
+  import { executeAIHarnessTask } from '../../lib/ai-harness';
+  import { appointments, finishAppointment, startAppointment } from '../../lib/data/appointments';
+  import { questions, questionsOf, setAnswered } from '../../lib/data/consultation';
+  import { onDataChange } from '../../lib/data/db';
+  import { esc } from '../../lib/forms';
+  import { confirmReview } from '../../lib/review';
+  import { getPatient } from '../../lib/store';
+
+  const PRIORITY_ORDER = { alta: 0, media: 1, baja: 2 } as const;
+  const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, '').trim();
+
+  window.addEventListener('ssb:room-ready', (e) => {
+    const { appointmentId } = (e as CustomEvent<{ appointmentId: string }>).detail;
+    const apt = appointments.get(appointmentId)!;
+    if (apt.status === 'CONFIRMADA') startAppointment(apt.id);
+    const panel = document.getElementById('q-panel')!;
+    panel.hidden = false;
+    const understood = document.getElementById('q-understood') as HTMLInputElement;
+    understood.checked = Boolean(apt.comprehensionConfirmed);
+
+    function render() {
+      const list = [...questionsOf(appointmentId)].sort(
+        (a, b) => (PRIORITY_ORDER[a.priority ?? 'media'] - PRIORITY_ORDER[b.priority ?? 'media']) || a.createdAt.localeCompare(b.createdAt)
+      );
+      document.getElementById('q-list')!.innerHTML = list.length
+        ? list
+            .map(
+              (q) => `<li class="${q.answered ? 'done' : ''}"><label>
+                <input type="checkbox" data-q="${q.id}" ${q.answered ? 'checked' : ''} />
+                <span>${q.priority ? `<span class="badge ${q.priority === 'alta' ? 'badge-danger' : q.priority === 'media' ? 'badge-warning' : 'badge'}">${q.priority}</span> ` : ''}
+                ${q.category ? `<span class="badge">${esc(q.category)}</span> ` : ''}${q.mode === 'señas' ? '🤟 ' : ''}${esc(q.text)}
+                <span class="sr-only">${q.answered ? '(respondida)' : '(pendiente)'}</span></span>
+              </label></li>`
+            )
+            .join('')
+        : '<li class="form-hint">El paciente no registró preguntas.</li>';
+      document.querySelectorAll<HTMLInputElement>('[data-q]').forEach((c) =>
+        c.addEventListener('change', () => {
+          setAnswered(c.dataset.q!, c.checked);
+          announce(c.checked ? 'Pregunta marcada como respondida.' : 'Pregunta marcada como pendiente.');
+        })
+      );
+    }
+
+    document.getElementById('q-organize')!.addEventListener('click', async () => {
+      const list = questionsOf(appointmentId);
+      if (!list.length) return announce('No hay preguntas para ordenar.');
+      const patient = getPatient(apt.patientId);
+      const res = await executeAIHarnessTask('ORGANIZE_PATIENT_QUESTIONS', {
+        patientName: patient?.fullName ?? 'Paciente',
+        specialty: apt.specialty,
+        consultationReason: apt.reason,
+        rawNotesAndDoubts: list.map((q) => q.text).join('\n'),
+        preferredInputMode: 'texto',
+      });
+      // Se asigna a cada pregunta la prioridad y categoría que propuso el asistente.
+      res.data.prioritizedQuestions.forEach((item) => {
+        const key = norm(item.question);
+        const match = list.find((q) => key.includes(norm(q.text)) || norm(q.text).includes(key));
+        if (match) questions.update(match.id, { priority: item.priority, category: item.category });
+      });
+      document.getElementById('q-provider')!.textContent = `Ordenadas por el agente (${res.provider}). La IA no responde las preguntas: solo las ordena.`;
+      announce('Preguntas ordenadas por prioridad.');
+    });
+
+    understood.addEventListener('change', () => {
+      appointments.update(apt.id, { comprehensionConfirmed: understood.checked });
+      announce(understood.checked ? 'Comprensión del paciente registrada.' : 'Comprensión desmarcada.');
+    });
+
+    document.getElementById('finish')!.addEventListener('click', async () => {
+      const pending = questionsOf(appointmentId).filter((q) => !q.answered).length;
+      const ok = await confirmReview({
+        title: '¿Finalizar la consulta?',
+        items: [
+          ['Preguntas pendientes', String(pending)],
+          ['Comprensión confirmada', understood.checked ? 'Sí' : 'No'],
+        ],
+        warning: pending || !understood.checked ? 'Quedan preguntas sin responder o falta confirmar la comprensión del paciente.' : undefined,
+        confirmLabel: 'Finalizar y preparar resumen',
+      });
+      if (!ok) return;
+      finishAppointment(apt.id);
+      location.href = `/profesional/resumen?cita=${apt.id}`;
+    });
+
+    render();
+    onDataChange(render);
+  });
+</script>

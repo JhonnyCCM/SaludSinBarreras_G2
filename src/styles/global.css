@@ -597,8 +597,9 @@ main {
   font-weight: 700;
   color: var(--text-muted);
   background: var(--surface);
-  white-space: nowrap;
+  white-space: normal;
   letter-spacing: 0;
+  max-width: 100%;
 }
 
 kbd {

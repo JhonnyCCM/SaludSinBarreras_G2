@@ -63,9 +63,6 @@ html[data-contrast="high"] {
   --shadow: 0 0 0 1px #00ffff;
 }
 
-html[data-contrast="grayscale"] {
-  filter: grayscale(100%);
-}
 
 *,
 *::before,
@@ -78,17 +75,58 @@ body {
   font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
   background-color: var(--bg);
   color: var(--text);
-  line-height: 1.55;
+  line-height: var(--a11y-line-height, 1.4);
   overflow-x: clip;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
-html[data-easy-read="true"] body {
-  line-height: 1.75;
-  letter-spacing: 0.015em;
+/* ---------- Opciones del menú F3 ---------- */
+
+/* Interlineado 1,5 y 2 veces la fuente (WCAG 1.4.12) */
+html[data-line-height="medium"] { --a11y-line-height: 1.5; }
+html[data-line-height="large"] { --a11y-line-height: 2; }
+
+/* Espaciado de letras 0,12, palabras 0,16 y párrafos 2 veces la fuente (WCAG 1.4.12) */
+html[data-text-spacing="true"] body {
+  letter-spacing: 0.12em;
+  word-spacing: 0.16em;
 }
+html[data-text-spacing="true"] p,
+html[data-text-spacing="true"] li {
+  margin-bottom: 2em;
+}
+
+/* Fuente legible, alineada a la izquierda y con líneas de máximo 80 caracteres (WCAG 1.4.8) */
+html[data-readable-font="true"] body {
+  font-family: Verdana, Tahoma, 'Atkinson Hyperlegible', Arial, sans-serif;
+}
+html[data-readable-font="true"] main :is(p, li, label, .form-hint) {
+  max-width: 80ch;
+  text-align: left;
+}
+
+/* Detener animaciones y movimiento (WCAG 2.2.2 y 2.3.3) */
+html[data-reduce-motion="true"] *,
+html[data-reduce-motion="true"] *::before,
+html[data-reduce-motion="true"] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Lectura fácil: muestra las versiones en frases cortas y pictogramas (WCAG 3.1.5) */
+.easy-read-only { display: none; }
+html[data-easy-read="true"] .easy-read-only { display: block; }
+html[data-easy-read="true"] .technical-only { display: none; }
 
 /* Enlace saltar al contenido principal (WCAG 2.4.1 A) */
 .skip-link {
@@ -124,7 +162,7 @@ html[data-focus="enhanced"] *:focus-visible {
   box-shadow: 0 0 0 8px rgba(217, 119, 6, 0.35);
 }
 
-/* Objetivos táctiles de 44x44px (WCAG 2.5.5 AAA; supera el mínimo de 24x24px del 2.5.8 AA) */
+/* Tamaño mínimo de objetivos: 24x24 px por defecto (WCAG 2.5.8 AA, F4) */
 button,
 .btn,
 a.nav-link,
@@ -132,7 +170,7 @@ input:not([type="checkbox"]):not([type="radio"]),
 select,
 textarea,
 .touch-target {
-  min-height: 44px;
+  min-height: 36px;
   font-family: inherit;
   font-size: 1rem;
 }
@@ -141,7 +179,7 @@ button,
 .btn,
 a.nav-link,
 .touch-target {
-  min-width: 44px;
+  min-width: 36px;
 }
 
 input[type="checkbox"],
@@ -153,6 +191,21 @@ input[type="radio"] {
   margin: 0;
   accent-color: var(--primary);
   cursor: pointer;
+}
+
+/* Opción "Botones grandes" del menú: 44x44 px o más (WCAG 2.5.5 AAA, F3) */
+html[data-large-targets="true"] :is(button, .btn, a.nav-link, .touch-target, input, select, textarea) {
+  min-height: 48px;
+}
+html[data-large-targets="true"] :is(button, .btn, a.nav-link, .touch-target) {
+  min-width: 48px;
+  padding-inline: 1.2rem;
+}
+html[data-large-targets="true"] input:is([type="checkbox"], [type="radio"]) {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
 }
 
 a {

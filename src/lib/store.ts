@@ -1,4 +1,5 @@
 import { runDeterministicFallback } from './ai-harness/providers';
+import { supportsFor, type SupportKey } from './supports';
 import type {
   AnalyzeAccessibilityNeedsOutput,
   CommunicationPreferences,
@@ -18,6 +19,9 @@ export interface RegisteredPatient {
   disabilityDetails: string;
   assistiveTech: string[];
   preferences: CommunicationPreferences;
+  /** Apoyos habilitados según su discapacidad (RF-01, tabla del F4) */
+  supports: SupportKey[];
+  email?: string;
   consentAccepted: boolean;
   createdAt: string;
   aiAccessibilityBrief: AnalyzeAccessibilityNeedsOutput;
@@ -58,7 +62,7 @@ const SCHEDULES_KEY = 'ssb_schedules_v1';
 const INTERPRETERS_KEY = 'ssb_interpreters_v1';
 
 function buildSeedPatients(): RegisteredPatient[] {
-  const rawSeeds: Array<Omit<RegisteredPatient, 'aiAccessibilityBrief'>> = [
+  const rawSeeds: Array<Omit<RegisteredPatient, 'aiAccessibilityBrief' | 'supports'>> = [
     {
       id: 'pac-001',
       fullName: 'María Fernanda López',
@@ -141,6 +145,7 @@ function buildSeedPatients(): RegisteredPatient[] {
 
   return rawSeeds.map((seed) => ({
     ...seed,
+    supports: supportsFor(seed.disabilities),
     aiAccessibilityBrief: runDeterministicFallback('ANALYZE_ACCESSIBILITY_NEEDS', {
       patientName: seed.fullName,
       age: seed.age,
@@ -233,6 +238,12 @@ function safeWrite<T>(key: string, value: T): void {
 
 export function getPatients(): RegisteredPatient[] {
   return safeRead<RegisteredPatient[]>(PATIENTS_KEY, buildSeedPatients);
+}
+
+export function getPatient(id: string): RegisteredPatient | undefined {
+  const p = getPatients().find((x) => x.id === id);
+  // Registros guardados antes de existir `supports` se completan con la tabla del F4.
+  return p ? { ...p, supports: p.supports ?? supportsFor(p.disabilities) } : undefined;
 }
 
 export function addPatient(patient: RegisteredPatient): RegisteredPatient[] {

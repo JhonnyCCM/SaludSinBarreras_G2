@@ -521,6 +521,7 @@ const disabilityOptions: Array<{
     DisabilityCategory,
   } from '../lib/ai-harness/types';
   import { DISABILITY_LABELS, addPatient, type RegisteredPatient } from '../lib/store';
+  import { supportsFor } from '../lib/supports';
 
   const form = document.getElementById('patient-registration-form') as HTMLFormElement;
   const steps = Array.from(document.querySelectorAll<HTMLFieldSetElement>('.wizard-step'));
@@ -805,6 +806,7 @@ const disabilityOptions: Array<{
         disabilityDetails,
         assistiveTech,
         preferences,
+        supports: supportsFor(disabilities),
         consentAccepted: true,
         createdAt: new Date().toISOString(),
         aiAccessibilityBrief: harnessResult.data,

@@ -1,0 +1,206 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Mis preguntas" section="paciente" description="Preguntas del paciente por texto, voz o señas para su consulta (RF-04, FORM-03).">
+  <section class="card mb-3">
+    <span class="badge badge-info mb-1">T4-U1 · RF-04 · FORM-03</span>
+    <h1>Mis preguntas para la consulta</h1>
+    <p class="form-hint" style="margin: 0;">Escríbelas, díctalas o grábalas en señas. Tu médico las verá ordenadas antes y durante la consulta.</p>
+  </section>
+
+  <div id="q-errors" class="error-summary" tabindex="-1" hidden></div>
+
+  <form id="q-form" class="card mb-3" novalidate>
+    <div class="form-group">
+      <label class="form-label" for="q-apt">Consulta *</label>
+      <select id="q-apt" class="form-control"></select>
+    </div>
+
+    <fieldset class="plain-group">
+      <legend class="form-label">¿Cómo quieres hacer la pregunta? *</legend>
+      <div class="flex-wrap mt-1" role="radiogroup">
+        <label class="radio-chip"><input type="radio" name="q-mode" id="q-mode-texto" value="texto" checked /> ✍️ Escribir</label>
+        <label class="radio-chip"><input type="radio" name="q-mode" id="q-mode-voz" value="voz" /> 🎙️ Dictar</label>
+        <label class="radio-chip"><input type="radio" name="q-mode" id="q-mode-senas" value="señas" /> 🤟 Grabar en señas</label>
+      </div>
+    </fieldset>
+
+    <div class="form-group mt-2" id="q-text-group">
+      <label class="form-label" for="q-text" id="q-text-label">Tu pregunta *</label>
+      <textarea id="q-text" class="form-control" rows="3" aria-describedby="q-text-hint"></textarea>
+      <span class="form-hint" id="q-text-hint">Ejemplo: ¿El jarabe se toma antes o después de comer?</span>
+      <button type="button" class="btn btn-secondary mt-1" id="q-dictate" hidden aria-pressed="false">🎙️ Empezar a dictar</button>
+    </div>
+
+    <div id="q-sign-group" class="mt-2" hidden>
+      <div class="preview-sign"><video id="q-sign-video" playsinline muted aria-label="Vista previa de tu grabación en señas"></video></div>
+      <div class="flex-wrap mt-1">
+        <button type="button" class="btn btn-secondary" id="q-record" aria-pressed="false">⏺ Grabar (máx. 20 s)</button>
+        <span id="q-record-status" class="form-hint" role="status"></span>
+      </div>
+      <p class="form-hint">El intérprete verá tu grabación y la traducirá para el médico.</p>
+    </div>
+
+    <button type="submit" class="btn btn-primary mt-2">Guardar pregunta</button>
+  </form>
+
+  <section class="card" aria-labelledby="t-list">
+    <h2 id="t-list">Preguntas guardadas</h2>
+    <ul id="q-list" class="q-list"></ul>
+  </section>
+</BaseLayout>
+
+<style>
+  .plain-group { border: none; padding: 0; margin: 0; }
+  .preview-sign { background: #0f172a; border-radius: var(--radius); max-width: 420px; aspect-ratio: 4 / 3; overflow: hidden; }
+  .preview-sign video { width: 100%; height: 100%; object-fit: cover; }
+  #q-sign-group[hidden], #q-text-group[hidden] { display: none; }
+  .q-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; }
+  .q-list li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem; padding: 0.6rem 0.8rem; border: 1px solid var(--border-subtle); border-radius: var(--radius); }
+</style>
+
+<script>
+  import { announce } from '../../lib/announce';
+  import { isActive, ofPatient } from '../../lib/data/appointments';
+  import { addQuestion, questions, questionsOf, type QuestionMode } from '../../lib/data/consultation';
+  import { formatDate, isoDate, onDataChange } from '../../lib/data/db';
+  import { professionals } from '../../lib/data/professionals';
+  import { esc, validateForm, valueOf } from '../../lib/forms';
+  import { requireRole } from '../../lib/session';
+
+  const session = requireRole('paciente');
+  if (session) {
+    const form = document.getElementById('q-form') as HTMLFormElement;
+    const summary = document.getElementById('q-errors') as HTMLElement;
+    const aptSel = document.getElementById('q-apt') as HTMLSelectElement;
+    const upcoming = ofPatient(session.userId).filter((a) => isActive(a) && a.date >= isoDate(0));
+    aptSel.innerHTML = upcoming.length
+      ? upcoming.map((a) => `<option value="${a.id}">${esc(formatDate(a.date))} ${a.time} · ${esc(professionals.get(a.professionalId)?.name ?? '')}</option>`).join('')
+      : '<option value="">No tienes citas próximas</option>';
+    const preset = new URLSearchParams(location.search).get('cita');
+    if (preset && upcoming.some((a) => a.id === preset)) aptSel.value = preset;
+
+    const mode = () => (form.querySelector<HTMLInputElement>('input[name="q-mode"]:checked')?.value ?? 'texto') as QuestionMode;
+    let signSeconds = 0;
+
+    function syncMode() {
+      const m = mode();
+      document.getElementById('q-sign-group')!.hidden = m !== 'señas';
+      document.getElementById('q-dictate')!.hidden = m !== 'voz';
+      document.getElementById('q-text-label')!.textContent = m === 'señas' ? 'Resumen breve (opcional)' : 'Tu pregunta *';
+    }
+    form.querySelectorAll('input[name="q-mode"]').forEach((r) => r.addEventListener('change', syncMode));
+
+    // Dictado (Web Speech API)
+    type SR = { lang: string; start(): void; stop(): void; onresult: (e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void; onend: () => void };
+    const SRClass = (window as unknown as { SpeechRecognition?: new () => SR; webkitSpeechRecognition?: new () => SR }).SpeechRecognition ??
+      (window as unknown as { webkitSpeechRecognition?: new () => SR }).webkitSpeechRecognition;
+    const dictBtn = document.getElementById('q-dictate') as HTMLButtonElement;
+    if (!SRClass) {
+      dictBtn.disabled = true;
+      dictBtn.textContent = '🎙️ Dictado no disponible en este navegador';
+    }
+    dictBtn.addEventListener('click', () => {
+      if (!SRClass) return;
+      const rec = new SRClass();
+      rec.lang = 'es-EC';
+      rec.onresult = (e) => {
+        const t = document.getElementById('q-text') as HTMLTextAreaElement;
+        t.value = `${t.value} ${e.results[0][0].transcript}`.trim();
+        announce('Texto dictado agregado.');
+      };
+      rec.onend = () => dictBtn.setAttribute('aria-pressed', 'false');
+      dictBtn.setAttribute('aria-pressed', 'true');
+      rec.start();
+    });
+
+    // Grabación en señas (MediaRecorder). En el prototipo el video queda en este dispositivo.
+    const recBtn = document.getElementById('q-record') as HTMLButtonElement;
+    let recorder: MediaRecorder | null = null;
+    recBtn.addEventListener('click', async () => {
+      const status = document.getElementById('q-record-status')!;
+      if (recorder) {
+        recorder.stop();
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const video = document.getElementById('q-sign-video') as HTMLVideoElement;
+        video.srcObject = stream;
+        await video.play();
+        const chunks: Blob[] = [];
+        recorder = new MediaRecorder(stream);
+        const started = Date.now();
+        recorder.ondataavailable = (e) => chunks.push(e.data);
+        recorder.onstop = () => {
+          signSeconds = Math.max(1, Math.round((Date.now() - started) / 1000));
+          stream.getTracks().forEach((t) => t.stop());
+          video.srcObject = null;
+          video.src = URL.createObjectURL(new Blob(chunks, { type: 'video/webm' }));
+          video.muted = true;
+          video.controls = true;
+          recorder = null;
+          recBtn.setAttribute('aria-pressed', 'false');
+          recBtn.textContent = '⏺ Grabar de nuevo';
+          status.textContent = `Grabación lista (${signSeconds} s).`;
+        };
+        recorder.start();
+        recBtn.setAttribute('aria-pressed', 'true');
+        recBtn.textContent = '⏹ Detener grabación';
+        status.textContent = 'Grabando…';
+        window.setTimeout(() => recorder?.stop(), 20000);
+      } catch {
+        status.textContent = 'No se pudo usar la cámara. Puedes escribir la pregunta.';
+      }
+    });
+
+    function render() {
+      const list = document.getElementById('q-list')!;
+      const items = aptSel.value ? questionsOf(aptSel.value) : [];
+      list.innerHTML = items.length
+        ? items
+            .map(
+              (q) => `<li><span>${q.mode === 'señas' ? '🤟' : q.mode === 'voz' ? '🎙️' : '✍️'} ${esc(q.text)}</span>
+              <span class="flex-wrap">${q.answered ? '<span class="badge badge-success">Respondida</span>' : '<span class="badge badge-warning">Pendiente</span>'}
+              ${q.answered ? '' : `<button type="button" class="btn btn-secondary" data-del="${q.id}" aria-label="Eliminar pregunta: ${esc(q.text)}">Eliminar</button>`}</span></li>`
+            )
+            .join('')
+        : '<li class="form-hint">Aún no tienes preguntas para esta consulta.</li>';
+      list.querySelectorAll<HTMLButtonElement>('[data-del]').forEach((b) =>
+        b.addEventListener('click', () => {
+          questions.remove(b.dataset.del!);
+          announce('Pregunta eliminada.');
+        })
+      );
+    }
+    aptSel.addEventListener('change', render);
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const m = mode();
+      const ok = validateForm(
+        form,
+        [
+          { id: 'q-apt', label: 'Consulta', check: (v) => (v ? null : 'Primero reserva una cita.') },
+          m === 'señas'
+            ? { id: 'q-record', label: 'Grabación en señas', check: () => (signSeconds ? null : 'Graba tu pregunta en señas antes de guardarla.') }
+            : { id: 'q-text', label: 'Tu pregunta', check: (v) => (v.trim().length >= 5 ? null : 'Escribe o dicta tu pregunta (al menos 5 letras).') },
+        ],
+        summary
+      );
+      if (!ok) return;
+      const text = m === 'señas' ? valueOf('q-text') || `Pregunta grabada en señas (${signSeconds} s)` : valueOf('q-text');
+      addQuestion(aptSel.value, text, m);
+      form.reset();
+      aptSel.value = aptSel.options[aptSel.selectedIndex]?.value ?? aptSel.value;
+      signSeconds = 0;
+      syncMode();
+      announce('Pregunta guardada.');
+    });
+
+    syncMode();
+    render();
+    onDataChange(render);
+  }
+</script>

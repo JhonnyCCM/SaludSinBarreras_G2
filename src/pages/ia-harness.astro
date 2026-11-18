@@ -3,17 +3,19 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
 <BaseLayout
-  title="Harness de IA No Conversacional y Firma Médica"
+  title="Laboratorio del agente IA"
   description="Demostración del Harness de IA No Conversacional para SaludSinBarreras: tareas cerradas, guardrails clínicos y aprobación obligatoria del profesional (RF-05, RF-07, RF-14)."
 >
   <section class="card mb-3">
     <span class="badge badge-warning mb-1">Componente IA No Conversacional · T4-U1 · T7-U2 · RF-04 · RF-05 · RF-07 · RF-14</span>
-    <h1>Harness de IA No Conversacional y Validación Clínica</h1>
+    <h1>Laboratorio del agente IA no conversacional</h1>
     <p>
-      Este componente <strong>no es un chatbot</strong>: ejecuta exclusivamente tareas clínicas acotadas
-      con entrada estructurada, salida JSON tipada, bloqueo de diagnóstico/prescripción autónoma y
-      <strong>retención obligatoria hasta que el profesional de salud firme el borrador</strong>.
+      Página técnica para la demostración. El agente <strong>no es un chatbot</strong>: ejecuta solo tareas
+      cerradas con entrada estructurada, bloquea diagnósticos o recetas autónomas y retiene todo borrador
+      <strong>hasta que el profesional lo firma</strong>. Por defecto usa el agente en Rust
+      (<code>npm run agente</code>); si está apagado, usa el motor local del navegador.
     </p>
+    <p class="form-hint">En el flujo real, estas tareas se usan en <a href="/profesional/consulta">Consulta</a> y <a href="/profesional/resumen">Resumen IA</a>.</p>
   </section>
 
   <!-- Panel de Configuración del Adaptador y Prueba Anti-Chat -->

@@ -11,6 +11,7 @@ mod guardrails;
 mod lector;
 mod senas;
 mod tareas;
+mod tiempo_real;
 
 use std::net::SocketAddr;
 
@@ -35,6 +36,10 @@ pub fn app() -> Router {
     Router::new()
         .route("/salud", get(salud))
         .route("/v1/tareas/{tarea}", post(api::ejecutar_tarea))
+        .route("/v1/senas", post(tiempo_real::rest_senas))
+        .route("/v1/lector", post(tiempo_real::rest_lector))
+        .route("/v1/tiempo-real", get(tiempo_real::ws))
+        .with_state(tiempo_real::Estado::default())
         .layer(cors)
 }
 

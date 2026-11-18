@@ -30,12 +30,21 @@ const isCurrent = (target: string) =>
         try {
           var raw = localStorage.getItem('ssb_a11y_prefs_v1');
           if (!raw) return;
-          var prefs = JSON.parse(raw);
+          var p = JSON.parse(raw);
           var root = document.documentElement;
-          if (prefs.fontScale) root.style.setProperty('--a11y-font-scale', String(prefs.fontScale));
-          if (prefs.contrast) root.setAttribute('data-contrast', prefs.contrast);
-          if (prefs.focusEnhanced) root.setAttribute('data-focus', 'enhanced');
-          if (prefs.easyRead) root.setAttribute('data-easy-read', 'true');
+          var flag = function (v) { return v ? 'true' : 'false'; };
+          if (p.fontScale) root.style.setProperty('--a11y-font-scale', String(p.fontScale));
+          // Mismos atributos que a11yRootAttributes() en src/lib/accessibility.ts
+          root.setAttribute('data-contrast', p.contrast === 'high' ? 'high' : 'standard');
+          root.setAttribute('data-focus', p.focusEnhanced ? 'enhanced' : 'standard');
+          root.setAttribute('data-line-height', p.lineHeight || 'normal');
+          root.setAttribute('data-text-spacing', flag(p.textSpacing));
+          root.setAttribute('data-readable-font', flag(p.readableFont));
+          root.setAttribute('data-large-targets', flag(p.largeTargets));
+          root.setAttribute('data-reduce-motion', flag(p.reduceMotion));
+          root.setAttribute('data-easy-read', flag(p.easyRead));
+          root.setAttribute('data-show-transcript', flag(p.showTranscript));
+          root.setAttribute('data-pin-interpreter', flag(p.pinInterpreter));
         } catch (e) {}
       })();
     </script>

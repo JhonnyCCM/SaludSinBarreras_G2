@@ -54,7 +54,7 @@ export interface RoomConnection {
 // ---------------- Glosador local (respaldo reducido del glosador Rust) ----------------
 
 const LEX: Record<string, [string, string | null]> = {
-  hola: ['HOLA', null], gracias: ['GRACIAS', null], si: ['SÍ', null], no: ['NO', null], bien: ['BIEN', null],
+  hola: ['HOLA', null], gracias: ['GRACIAS', null], no: ['NO', null], inmediato: ['AHORA-MISMO', 'alerta'], bien: ['BIEN', null],
   doctor: ['MÉDICO', 'medico'], doctora: ['MÉDICO', 'medico'], medico: ['MÉDICO', 'medico'],
   dolor: ['DOLOR', 'dolor'], duele: ['DOLOR', 'dolor'], fiebre: ['FIEBRE', 'termometro'], cabeza: ['CABEZA', null],
   garganta: ['GARGANTA', null], tos: ['TOS', null], mareo: ['MAREO', null], presion: ['PRESIÓN', 'corazon'],
@@ -80,7 +80,8 @@ export function glosarLocal(texto: string): Traduccion {
     const glosas: Glosa[] = [];
     for (const w of frase.split(/[^\p{L}\p{N}]+/u).filter(Boolean)) {
       const n = norm(w);
-      if (/^\d+$/.test(n)) glosas.push({ glosa: n, tipo: 'numero', original: w, pictograma: null, duracionMs: 600 });
+      if (n === 'si') glosas.push({ glosa: w.toLowerCase() === 'sí' ? 'SÍ' : 'SI-CONDICIÓN', tipo: 'lexica', original: w, pictograma: null, duracionMs: 750 });
+      else if (/^\d+$/.test(n)) glosas.push({ glosa: n, tipo: 'numero', original: w, pictograma: null, duracionMs: 600 });
       else if (LEX[n]) glosas.push({ glosa: LEX[n][0], tipo: 'lexica', original: w, pictograma: LEX[n][1], duracionMs: 750 });
       else if (!SKIP.has(n) && n.length > 1) {
         const letras = w.toUpperCase().replace(/[^\p{L}]/gu, '').split('');

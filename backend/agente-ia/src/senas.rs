@@ -87,6 +87,7 @@ static FRASES: LazyLock<Vec<(&'static str, Entrada)>> = LazyLock::new(|| {
         ("todos los dias", ("CADA-DÍA", Some("calendario"))),
         ("cada dia", ("CADA-DÍA", Some("calendario"))),
         ("otra vez", ("OTRA-VEZ", None)),
+        ("de inmediato", ("AHORA-MISMO", Some("alerta"))),
         ("de nuevo", ("OTRA-VEZ", None)),
         ("por que", ("POR-QUÉ", None)),
         ("vision borrosa", ("VER BORROSO", Some("ojo"))),
@@ -108,7 +109,6 @@ static LEXICO: LazyLock<HashMap<&'static str, Entrada>> = LazyLock::new(|| {
         (&["hola"], ("HOLA", None)),
         (&["gracias"], ("GRACIAS", None)),
         (&["adios", "chao"], ("ADIÓS", None)),
-        (&["si"], ("SÍ", None)),
         (&["no"], ("NO", None)),
         (&["bien"], ("BIEN", None)),
         (&["mal"], ("MAL", None)),
@@ -181,6 +181,7 @@ static LEXICO: LazyLock<HashMap<&'static str, Entrada>> = LazyLock::new(|| {
         (&["manana"], ("MAÑANA", Some("sol"))),
         (&["ayer"], ("AYER", Some("calendario"))),
         (&["ahora"], ("AHORA", None)),
+        (&["inmediato", "inmediatamente", "enseguida"], ("AHORA-MISMO", Some("alerta"))),
         (&["despues", "luego"], ("DESPUÉS", None)),
         (&["antes"], ("ANTES", None)),
         (&["siempre"], ("SIEMPRE", None)),
@@ -309,7 +310,11 @@ fn traducir_oracion(original: &str) -> Option<Oracion> {
         }
         let w = norm[i].as_str();
         let o = palabras_orig[i];
-        if w.chars().all(|c| c.is_ascii_digit()) {
+        if w == "si" {
+            // "sí" (afirmación) y "si" (condición) solo se distinguen por la tilde.
+            let afirmacion = o.to_lowercase() == "sí";
+            glosas.push(glosa(if afirmacion { "SÍ" } else { "SI-CONDICIÓN" }, TipoGlosa::Lexica, o, None));
+        } else if w.chars().all(|c| c.is_ascii_digit()) {
             glosas.push(glosa(w, TipoGlosa::Numero, o, None));
         } else if let Some((g, p)) = LEXICO.get(w) {
             let tipo = if g.chars().all(|c| c.is_ascii_digit()) { TipoGlosa::Numero } else { TipoGlosa::Lexica };
@@ -440,6 +445,14 @@ mod pruebas {
     fn dias_de_la_semana_van_al_inicio() {
         let t = traducir("Me duele la garganta desde el lunes.");
         assert_eq!(t.texto_glosado, "LUNES DOLOR GARGANTA");
+    }
+
+    #[test]
+    fn distingue_si_condicional_de_si_afirmativo() {
+        let t = traducir("Si tiene fiebre acuda de inmediato.");
+        assert_eq!(t.texto_glosado, "SI-CONDICIÓN TENER FIEBRE IR AHORA-MISMO");
+        let t = traducir("Sí, entiendo.");
+        assert_eq!(t.texto_glosado, "SÍ ENTENDER");
     }
 
     #[test]

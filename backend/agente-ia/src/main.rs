@@ -8,6 +8,7 @@
 
 mod api;
 mod guardrails;
+mod senas;
 mod tareas;
 
 use std::net::SocketAddr;

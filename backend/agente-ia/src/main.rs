@@ -6,6 +6,8 @@
 //! - Segmentos para lector de pantalla / lectura en voz alta.
 //! - Canal en tiempo real por sala de videoconsulta.
 
+mod guardrails;
+
 use std::net::SocketAddr;
 
 use axum::{routing::get, Json, Router};

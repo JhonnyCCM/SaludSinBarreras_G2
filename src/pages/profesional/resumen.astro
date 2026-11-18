@@ -1,0 +1,240 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Resumen de indicaciones" section="profesional" description="Borrador de indicaciones generado por IA, corregido y firmado por el profesional (RF-14, FORM-06).">
+  <section class="card mb-3">
+    <span class="badge badge-warning mb-1">T7-U2 · RF-14 · FORM-06</span>
+    <h1>Resumen de indicaciones</h1>
+    <p class="form-hint" style="margin: 0;">La IA prepara un borrador a partir de tus notas y la transcripción. El paciente solo lo recibe cuando lo firmas.</p>
+  </section>
+
+  <div id="sum-errors" class="error-summary" tabindex="-1" hidden></div>
+
+  <form id="gen-form" class="card mb-3" novalidate>
+    <div class="form-group">
+      <label class="form-label" for="sum-apt">Consulta *</label>
+      <select id="sum-apt" class="form-control"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="sum-notes">Tus notas clínicas *</label>
+      <textarea id="sum-notes" class="form-control" rows="5" aria-describedby="sum-notes-hint"></textarea>
+      <span class="form-hint" id="sum-notes-hint">Una indicación por línea. Ejemplo: Paracetamol 500 mg: tomar 1 tableta cada 8 horas por 3 días.</span>
+    </div>
+    <details>
+      <summary class="touch-target summary-btn">Ver transcripción de la consulta</summary>
+      <pre id="sum-transcript" class="transcript-pre"></pre>
+    </details>
+    <button type="submit" class="btn btn-primary mt-2">🤖 Generar borrador con IA</button>
+  </form>
+
+  <section id="review" class="card" aria-labelledby="t-review" hidden>
+    <div class="flex-wrap" style="justify-content: space-between;">
+      <h2 id="t-review" tabindex="-1" style="margin: 0;">Revisa y corrige el borrador</h2>
+      <span class="badge badge-warning" id="sum-status">BORRADOR GENERADO POR IA</span>
+    </div>
+    <div id="guardrail-box" class="mt-2"></div>
+
+    <form id="sign-form" novalidate>
+      <div class="form-group mt-2">
+        <label class="form-label" for="ed-summary">Resumen en lectura fácil *</label>
+        <textarea id="ed-summary" class="form-control" rows="3"></textarea>
+      </div>
+      <fieldset class="med-edit">
+        <legend class="form-label">Medicamentos (revisa nombre, dosis y horario)</legend>
+        <div id="ed-meds"></div>
+      </fieldset>
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label" for="ed-care">Cuidados (uno por línea)</label>
+          <textarea id="ed-care" class="form-control" rows="4"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="ed-warn">Señales de alarma (una por línea) *</label>
+          <textarea id="ed-warn" class="form-control" rows="4"></textarea>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="ed-next">Próximo paso *</label>
+        <input id="ed-next" class="form-control" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="ed-signer">Firma del profesional *</label>
+        <input id="ed-signer" class="form-control" autocomplete="name" />
+      </div>
+      <label class="check-card">
+        <input type="checkbox" id="ed-checked" />
+        <span class="check-card-body"><strong>Revisé nombres de medicamentos, dosis y horarios *</strong><span class="form-hint">El texto no es un diagnóstico automático; es mi indicación.</span></span>
+      </label>
+      <div class="flex-wrap mt-2">
+        <button type="submit" class="btn btn-success">✍️ Firmar y enviar al paciente</button>
+      </div>
+    </form>
+  </section>
+
+  <section id="signed" class="card mt-3" hidden>
+    <div class="alert-box success" role="status" tabindex="-1" id="signed-msg"></div>
+    <div class="flex-wrap mt-2" id="signed-links"></div>
+  </section>
+</BaseLayout>
+
+<style is:global>
+  .transcript-pre { white-space: pre-wrap; background: var(--surface-alt); padding: 0.75rem; border-radius: var(--radius); font-size: 0.9rem; max-height: 240px; overflow: auto; }
+  .med-edit { border: 2px solid var(--border-subtle); border-radius: var(--radius); padding: 0.75rem; margin: 0 0 1rem; }
+  .med-row { display: grid; gap: 0.5rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); padding: 0.6rem 0; border-bottom: 1px dashed var(--border-subtle); }
+  .med-row:last-child { border-bottom: none; }
+  #review[hidden], #signed[hidden] { display: none; }
+</style>
+
+<script>
+  import { announce } from '../../lib/announce';
+  import { approveHarnessResult, executeAIHarnessTask, type AIHarnessResult, type SummarizeMedicalIndicationsOutput } from '../../lib/ai-harness';
+  import { appointments, ofProfessional } from '../../lib/data/appointments';
+  import { saveDraft, signSummary, summaries, transcriptText } from '../../lib/data/consultation';
+  import { formatDate } from '../../lib/data/db';
+  import { professionals } from '../../lib/data/professionals';
+  import { esc, rules, validateForm, valueOf } from '../../lib/forms';
+  import { confirmReview } from '../../lib/review';
+  import { requireRole } from '../../lib/session';
+  import { getPatient } from '../../lib/store';
+
+  const session = requireRole('profesional');
+  if (session) {
+    const prof = professionals.get(session.userId)!;
+    const aptSel = document.getElementById('sum-apt') as HTMLSelectElement;
+    const candidates = ofProfessional(prof.id).filter((a) => a.status === 'ATENDIDA' || a.status === 'EN_CURSO').reverse();
+    aptSel.innerHTML = candidates.length
+      ? candidates
+          .map((a) => {
+            const s = summaries.get(a.id);
+            return `<option value="${a.id}">${esc(formatDate(a.date))} ${a.time} · ${esc(getPatient(a.patientId)?.fullName ?? '')}${s ? ` (${s.status === 'FIRMADO' ? 'firmado' : 'borrador'})` : ''}</option>`;
+          })
+          .join('')
+      : '<option value="">No hay consultas atendidas</option>';
+    const preset = new URLSearchParams(location.search).get('cita');
+    if (preset && candidates.some((a) => a.id === preset)) aptSel.value = preset;
+    (document.getElementById('ed-signer') as HTMLInputElement).value = `${prof.name} — ${prof.registry}`;
+
+    let result: AIHarnessResult<SummarizeMedicalIndicationsOutput> | null = null;
+    const syncTranscript = () => {
+      document.getElementById('sum-transcript')!.textContent = aptSel.value ? transcriptText(aptSel.value) || '(Sin transcripción guardada)' : '';
+    };
+    aptSel.addEventListener('change', syncTranscript);
+    syncTranscript();
+
+    function fillEditor(d: SummarizeMedicalIndicationsOutput) {
+      (document.getElementById('ed-summary') as HTMLTextAreaElement).value = d.easyReadSummary;
+      (document.getElementById('ed-care') as HTMLTextAreaElement).value = d.careSteps.join('\n');
+      (document.getElementById('ed-warn') as HTMLTextAreaElement).value = d.warningSigns.join('\n');
+      (document.getElementById('ed-next') as HTMLInputElement).value = d.nextFollowUp;
+      document.getElementById('ed-meds')!.innerHTML =
+        d.medications
+          .map(
+            (m, i) => `<div class="med-row" role="group" aria-label="Medicamento ${i + 1}">
+              <div class="form-group"><label class="form-label" for="m-name-${i}">Nombre</label><input class="form-control" id="m-name-${i}" value="${esc(m.name)}" /></div>
+              <div class="form-group"><label class="form-label" for="m-dose-${i}">Dosis</label><input class="form-control" id="m-dose-${i}" value="${esc(m.dosage)}" /></div>
+              <div class="form-group"><label class="form-label" for="m-sched-${i}">Horario</label><input class="form-control" id="m-sched-${i}" value="${esc(m.schedule)}" /></div>
+              <div class="form-group"><label class="form-label" for="m-plain-${i}">Instrucción para el paciente</label><input class="form-control" id="m-plain-${i}" value="${esc(m.plainInstruction)}" /></div>
+            </div>`
+          )
+          .join('') || '<p class="form-hint">La IA no detectó medicamentos en tus notas.</p>';
+    }
+
+    function collect(): SummarizeMedicalIndicationsOutput {
+      const base = result!.data;
+      const lines = (id: string) => valueOf(id).split('\n').map((l) => l.trim()).filter(Boolean);
+      return {
+        ...base,
+        easyReadSummary: valueOf('ed-summary'),
+        careSteps: lines('ed-care'),
+        warningSigns: lines('ed-warn'),
+        nextFollowUp: valueOf('ed-next'),
+        medications: base.medications.map((m, i) => ({
+          ...m,
+          name: valueOf(`m-name-${i}`),
+          dosage: valueOf(`m-dose-${i}`),
+          schedule: valueOf(`m-sched-${i}`),
+          plainInstruction: valueOf(`m-plain-${i}`),
+        })),
+      };
+    }
+
+    const genForm = document.getElementById('gen-form') as HTMLFormElement;
+    genForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const ok = validateForm(
+        genForm,
+        [
+          { id: 'sum-apt', label: 'Consulta', check: (v) => (v ? null : 'No hay una consulta atendida para resumir.') },
+          { id: 'sum-notes', label: 'Notas clínicas', check: rules.minLength(10, 'Escribe tus indicaciones; la IA no inventa dosis.') },
+        ],
+        document.getElementById('sum-errors')
+      );
+      if (!ok) return;
+      const apt = appointments.get(aptSel.value)!;
+      const patient = getPatient(apt.patientId)!;
+      result = await executeAIHarnessTask('SUMMARIZE_MEDICAL_INDICATIONS', {
+        doctorName: prof.name,
+        patientName: patient.fullName,
+        consultationDate: apt.date,
+        clinicalNotes: valueOf('sum-notes'),
+        transcriptText: transcriptText(apt.id),
+        targetFormat: { easyRead: true, includeAudioScript: true, includePictograms: true },
+      });
+      saveDraft(apt.id, patient.id, result.data, result.provider);
+      fillEditor(result.data);
+      const claims = result.guardrails.blockedDiagnosticClaims;
+      document.getElementById('guardrail-box')!.innerHTML = `<div class="alert-box ${claims.length ? 'danger' : 'warning'}">
+        <strong>🔒 El paciente aún no ve este texto.</strong> Generado por ${esc(result.provider)} en ${result.latencyMs} ms.
+        ${claims.length ? `<br><strong>Frases bloqueadas por el guardrail (${claims.length}):</strong> ${claims.map((c) => `<code>${esc(c)}</code>`).join(', ')}` : '<br>Sin frases de diagnóstico o receta autónoma.'}
+        <div class="form-hint">${esc(result.guardrails.disclaimer)}</div></div>`;
+      const review = document.getElementById('review')!;
+      review.hidden = false;
+      (document.getElementById('t-review') as HTMLElement).focus();
+      announce('Borrador generado. Revísalo y corrígelo antes de firmar.');
+    });
+
+    const signForm = document.getElementById('sign-form') as HTMLFormElement;
+    signForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!result) return;
+      const ok = validateForm(
+        signForm,
+        [
+          { id: 'ed-summary', label: 'Resumen', check: rules.minLength(10, 'Escribe un resumen claro para el paciente.') },
+          { id: 'ed-warn', label: 'Señales de alarma', check: rules.required('Indica al menos una señal de alarma.') },
+          { id: 'ed-next', label: 'Próximo paso', check: rules.required('Indica el próximo paso o control.') },
+          { id: 'ed-signer', label: 'Firma', check: rules.minLength(5, 'Escribe tu nombre y registro.') },
+          { id: 'ed-checked', label: 'Revisión', check: rules.checked('Confirma que revisaste nombres, dosis y horarios.') },
+        ],
+        document.getElementById('sum-errors')
+      );
+      if (!ok) return;
+      const edited = collect();
+      const confirmed = await confirmReview({
+        title: '¿Firmar y enviar el resumen al paciente?',
+        items: [
+          ['Paciente', getPatient(appointments.get(aptSel.value)!.patientId)?.fullName ?? ''],
+          ['Medicamentos', edited.medications.map((m) => `${m.name} ${m.dosage}`).join('; ') || 'Ninguno'],
+          ['Próximo paso', edited.nextFollowUp],
+          ['Firma', valueOf('ed-signer')],
+        ],
+        confirmLabel: 'Firmar y enviar',
+      });
+      if (!confirmed) return;
+      // Los guardrails se aplican también a tus ediciones antes de firmar.
+      const approved = approveHarnessResult(result, valueOf('ed-signer'), edited);
+      signSummary(aptSel.value, valueOf('ed-signer'), approved.data);
+      document.getElementById('review')!.hidden = true;
+      genForm.hidden = true;
+      const signed = document.getElementById('signed')!;
+      signed.hidden = false;
+      const msg = document.getElementById('signed-msg')!;
+      msg.innerHTML = '<strong>✅ Resumen firmado y enviado.</strong> El paciente ya puede verlo y escucharlo.';
+      msg.focus();
+      document.getElementById('signed-links')!.innerHTML = `
+        <a class="btn btn-primary" href="/profesional/receta?cita=${aptSel.value}">💊 Emitir receta</a>
+        <a class="btn btn-secondary" href="/profesional/historia?cita=${aptSel.value}">📁 Registrar en historia clínica</a>`;
+    });
+  }
+</script>

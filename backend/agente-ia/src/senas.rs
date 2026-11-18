@@ -171,6 +171,13 @@ static LEXICO: LazyLock<HashMap<&'static str, Entrada>> = LazyLock::new(|| {
         (&["volver", "vuelva", "regresar", "regrese"], ("VOLVER", None)),
         (&["ir", "acuda", "acudir", "vaya"], ("IR", None)),
         (&["hoy"], ("HOY", Some("calendario"))),
+        (&["lunes"], ("LUNES", Some("calendario"))),
+        (&["martes"], ("MARTES", Some("calendario"))),
+        (&["miercoles"], ("MIÉRCOLES", Some("calendario"))),
+        (&["jueves"], ("JUEVES", Some("calendario"))),
+        (&["viernes"], ("VIERNES", Some("calendario"))),
+        (&["sabado"], ("SÁBADO", Some("calendario"))),
+        (&["domingo"], ("DOMINGO", Some("calendario"))),
         (&["manana"], ("MAÑANA", Some("sol"))),
         (&["ayer"], ("AYER", Some("calendario"))),
         (&["ahora"], ("AHORA", None)),
@@ -235,7 +242,7 @@ const OMITIDAS: &[&str] = &[
 
 const TEMPORALES: &[&str] = &[
     "HOY", "MAÑANA", "AYER", "AHORA", "NOCHE", "TARDE", "CADA-DÍA", "CADA-MAÑANA", "SIEMPRE", "NUNCA", "BUENOS-DÍAS",
-    "BUENAS-TARDES",
+    "BUENAS-TARDES", "LUNES", "MARTES", "MIÉRCOLES", "JUEVES", "VIERNES", "SÁBADO", "DOMINGO",
 ];
 const INTERROGATIVOS: &[&str] = &["QUÉ", "CÓMO", "CUÁNDO", "DÓNDE", "CUÁNTO", "QUIÉN", "POR-QUÉ"];
 
@@ -427,6 +434,12 @@ mod pruebas {
         assert_eq!(g[0], ("L-O-S-A-R-T-Á-N", TipoGlosa::Dactilologia));
         assert_eq!(g[1], ("50", TipoGlosa::Numero));
         assert!(t.cobertura > 0.5);
+    }
+
+    #[test]
+    fn dias_de_la_semana_van_al_inicio() {
+        let t = traducir("Me duele la garganta desde el lunes.");
+        assert_eq!(t.texto_glosado, "LUNES DOLOR GARGANTA");
     }
 
     #[test]

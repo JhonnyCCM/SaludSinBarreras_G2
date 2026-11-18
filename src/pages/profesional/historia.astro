@@ -1,0 +1,144 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Historia clínica" section="profesional" description="Registro de la atención en la historia clínica con fecha, hora y autor (RF-16, FORM-08).">
+  <section class="card mb-3">
+    <span class="badge badge-info mb-1">T9-U2 · RF-16 · FORM-08</span>
+    <h1>Historia clínica</h1>
+  </section>
+
+  <div class="card mb-3">
+    <label class="form-label" for="hc-patient">Paciente</label>
+    <select id="hc-patient" class="form-control"></select>
+  </div>
+
+  <div id="hc-identity" class="identity-banner mb-3" role="status"></div>
+
+  <div class="dashboard-grid">
+    <section class="card" aria-labelledby="t-new">
+      <h2 id="t-new">Registrar atención</h2>
+      <div id="hc-errors" class="error-summary" tabindex="-1" hidden></div>
+      <form id="hc-form" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="hc-apt">Consulta *</label>
+          <select id="hc-apt" class="form-control"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="hc-reason">Motivo de consulta *</label>
+          <input id="hc-reason" class="form-control" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="hc-dx">Diagnóstico *</label>
+          <textarea id="hc-dx" class="form-control" rows="2" aria-describedby="hc-dx-hint"></textarea>
+          <span class="form-hint" id="hc-dx-hint">Lo escribe el profesional; la IA no diagnostica.</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="hc-plan">Plan de tratamiento *</label>
+          <textarea id="hc-plan" class="form-control" rows="3"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Revisar y guardar</button>
+      </form>
+    </section>
+
+    <section class="card" aria-labelledby="t-hist">
+      <h2 id="t-hist">Atenciones registradas</h2>
+      <ol id="hc-list" class="plain-list"></ol>
+    </section>
+  </div>
+</BaseLayout>
+
+<style is:global>
+  .identity-banner { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; padding: 1rem 1.25rem; border: 3px solid var(--primary); border-radius: var(--radius); background: var(--surface-alt); }
+  .identity-initials { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: var(--primary); color: var(--primary-text); font-weight: 800; font-size: 1.3rem; }
+  .plain-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.6rem; }
+  .plain-list > li { padding: 0.75rem; border: 1px solid var(--border-subtle); border-radius: var(--radius); background: var(--bg); }
+</style>
+
+<script>
+  import { announce } from '../../lib/announce';
+  import { appointments, ofProfessional } from '../../lib/data/appointments';
+  import { formatDate, formatDateTime, onDataChange } from '../../lib/data/db';
+  import { professionals } from '../../lib/data/professionals';
+  import { addRecord, logAccess, recordsOf } from '../../lib/data/records';
+  import { esc, rules, validateForm, valueOf } from '../../lib/forms';
+  import { confirmReview } from '../../lib/review';
+  import { requireRole } from '../../lib/session';
+  import { DISABILITY_LABELS, getPatient } from '../../lib/store';
+
+  const session = requireRole('profesional');
+  if (session) {
+    const prof = professionals.get(session.userId)!;
+    const author = `${prof.name} — ${prof.registry}`;
+    const mine = ofProfessional(prof.id);
+    const patientIds = [...new Set(mine.map((a) => a.patientId))];
+    const pSel = document.getElementById('hc-patient') as HTMLSelectElement;
+    const aSel = document.getElementById('hc-apt') as HTMLSelectElement;
+    pSel.innerHTML = patientIds.map((id) => `<option value="${id}">${esc(getPatient(id)?.fullName ?? id)} · C.I. ${esc(getPatient(id)?.cedula ?? '')}</option>`).join('');
+    const preset = new URLSearchParams(location.search).get('cita');
+    if (preset) pSel.value = appointments.get(preset)?.patientId ?? pSel.value;
+
+    function selectPatient() {
+      const p = getPatient(pSel.value);
+      if (!p) return;
+      logAccess(p.id, author, 'Consultó la historia clínica');
+      const initials = p.fullName.split(' ').slice(0, 2).map((w) => w[0]).join('');
+      document.getElementById('hc-identity')!.innerHTML = `<span class="identity-initials" aria-hidden="true">${esc(initials)}</span>
+        <span><strong style="font-size: 1.2rem;">${esc(p.fullName)}</strong><br>C.I. ${esc(p.cedula)} · ${p.age} años · ${esc(p.disabilities.map((d) => DISABILITY_LABELS[d]).join(', '))}</span>`;
+      const apts = mine.filter((a) => a.patientId === p.id && a.status !== 'CANCELADA').reverse();
+      aSel.innerHTML = apts.map((a) => `<option value="${a.id}">${esc(formatDate(a.date))} ${a.time} · ${esc(a.reason)}</option>`).join('');
+      if (preset && apts.some((a) => a.id === preset)) aSel.value = preset;
+      fillReason();
+      renderList();
+    }
+    const fillReason = () => {
+      (document.getElementById('hc-reason') as HTMLInputElement).value = appointments.get(aSel.value)?.reason ?? '';
+    };
+
+    function renderList() {
+      document.getElementById('hc-list')!.innerHTML =
+        recordsOf(pSel.value)
+          .map(
+            (r) => `<li><strong>${esc(formatDateTime(r.createdAt))}</strong> · ${esc(r.author)}
+              <p style="margin: 0.3rem 0;"><strong>Motivo:</strong> ${esc(r.reason)}</p>
+              <p style="margin: 0.3rem 0;"><strong>Diagnóstico:</strong> ${esc(r.diagnosis)}</p>
+              <p style="margin: 0;"><strong>Plan:</strong> ${esc(r.plan)}</p></li>`
+          )
+          .join('') || '<li class="form-hint">Sin atenciones registradas.</li>';
+    }
+
+    pSel.addEventListener('change', selectPatient);
+    aSel.addEventListener('change', fillReason);
+
+    const form = document.getElementById('hc-form') as HTMLFormElement;
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const ok = validateForm(
+        form,
+        [
+          { id: 'hc-apt', label: 'Consulta', check: (v) => (v ? null : 'Elige la consulta que estás registrando.') },
+          { id: 'hc-reason', label: 'Motivo', check: rules.required('Escribe el motivo de consulta.') },
+          { id: 'hc-dx', label: 'Diagnóstico', check: rules.minLength(4, 'Escribe el diagnóstico.') },
+          { id: 'hc-plan', label: 'Plan', check: rules.minLength(4, 'Escribe el plan de tratamiento.') },
+        ],
+        document.getElementById('hc-errors')
+      );
+      if (!ok) return;
+      const p = getPatient(pSel.value)!;
+      const confirmed = await confirmReview({
+        title: `¿Guardar en la historia de ${p.fullName}?`,
+        intro: 'Confirma que es el paciente correcto antes de guardar.',
+        items: [['Paciente', `${p.fullName} · C.I. ${p.cedula}`], ['Motivo', valueOf('hc-reason')], ['Diagnóstico', valueOf('hc-dx')], ['Plan', valueOf('hc-plan')], ['Autor', author]],
+        confirmLabel: 'Guardar atención',
+      });
+      if (!confirmed) return;
+      addRecord({ patientId: p.id, appointmentId: aSel.value, reason: valueOf('hc-reason'), diagnosis: valueOf('hc-dx'), plan: valueOf('hc-plan'), author });
+      (document.getElementById('hc-dx') as HTMLTextAreaElement).value = '';
+      (document.getElementById('hc-plan') as HTMLTextAreaElement).value = '';
+      announce('Atención guardada en la historia clínica.');
+    });
+
+    selectPatient();
+    onDataChange(renderList);
+  }
+</script>

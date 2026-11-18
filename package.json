@@ -9,7 +9,9 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "check": "astro check"
+    "check": "astro check",
+    "agente": "cargo run --release --manifest-path backend/agente-ia/Cargo.toml",
+    "agente:test": "cargo test --manifest-path backend/agente-ia/Cargo.toml"
   },
   "dependencies": {
     "astro": "^5.18.2"

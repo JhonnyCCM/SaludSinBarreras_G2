@@ -40,19 +40,19 @@ export interface Reminder {
 /** Una toma se considera omitida si pasaron más de 2 horas sin registrarla. */
 const GRACE_MS = 2 * 60 * 60 * 1000;
 
-export const prescriptions = collection<Prescription>('prescriptions', () => [
-  {
-    id: 'rx-000',
-    appointmentId: 'apt-000',
-    patientId: 'pac-002',
-    professionalId: 'prof-001',
-    createdAt: `${isoDate(-7)}T10:30:00`,
-    items: [
-      { id: 'rxi-1', medicine: 'Losartán', dose: '50 mg, 1 pastilla', everyHours: 24, days: 30, firstTime: '08:00' },
-      { id: 'rxi-2', medicine: 'Timolol 0,5 %', dose: '1 gota en cada ojo', everyHours: 12, days: 30, firstTime: '08:00' },
-    ],
-  },
-]);
+const SEED_PRESCRIPTION: Prescription = {
+  id: 'rx-000',
+  appointmentId: 'apt-000',
+  patientId: 'pac-002',
+  professionalId: 'prof-001',
+  createdAt: `${isoDate(-7)}T10:30:00`,
+  items: [
+    { id: 'rxi-1', medicine: 'Losartán', dose: '50 mg, 1 pastilla', everyHours: 24, days: 30, firstTime: '08:00' },
+    { id: 'rxi-2', medicine: 'Timolol 0,5 %', dose: '1 gota en cada ojo', everyHours: 12, days: 30, firstTime: '08:00' },
+  ],
+};
+
+export const prescriptions = collection<Prescription>('prescriptions', () => [SEED_PRESCRIPTION]);
 
 function buildReminders(rx: Prescription, startDate: string, horizonDays = 10): Reminder[] {
   const list: Reminder[] = [];
@@ -77,7 +77,9 @@ function buildReminders(rx: Prescription, startDate: string, horizonDays = 10): 
 
 export const reminders = collection<Reminder>('reminders', () => {
   // Historial de una semana con algunas tomas registradas y otras omitidas, más las próximas.
-  const seeded = buildReminders(prescriptions.all()[0], isoDate(-6), 9);
+  // Siempre desde la receta de ejemplo: si se usara prescriptions.all()[0] y el paciente ya recibió
+  // una receta nueva antes de sembrar, la semilla duplicaría esa receta con fechas pasadas.
+  const seeded = buildReminders(SEED_PRESCRIPTION, isoDate(-6), 9);
   const now = Date.now();
   return seeded.map((r, i) => {
     const due = new Date(r.dueAt).getTime();

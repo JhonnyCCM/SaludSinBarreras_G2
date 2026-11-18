@@ -1,0 +1,149 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Mi horario" section="profesional" description="Horario de atención por día y duración de cada tipo de consulta (RF-08, FORM-04).">
+  <section class="card mb-3">
+    <span class="badge badge-info mb-1">T1-U2 · RF-08 · FORM-04</span>
+    <h1>Mi horario de atención</h1>
+    <p class="form-hint" style="margin: 0;">Los pacientes solo pueden reservar en los bloques que publiques aquí.</p>
+  </section>
+
+  <div class="dashboard-grid">
+    <section class="card" aria-labelledby="t-dur">
+      <h2 id="t-dur">⏱️ Duración de cada tipo de consulta</h2>
+      <div id="dur-errors" class="error-summary" tabindex="-1" hidden></div>
+      <form id="dur-form" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="dur-general">General (minutos) *</label>
+          <input id="dur-general" class="form-control" type="number" min="10" max="120" step="5" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="dur-interprete">Con intérprete de señas (minutos) *</label>
+          <input id="dur-interprete" class="form-control" type="number" min="15" max="150" step="5" aria-describedby="dur-interprete-hint" />
+          <span class="form-hint" id="dur-interprete-hint">Recomendado: 15 minutos más que la consulta general.</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="dur-control">De control (minutos) *</label>
+          <input id="dur-control" class="form-control" type="number" min="10" max="120" step="5" />
+        </div>
+        <button type="submit" class="btn btn-primary">Guardar duraciones</button>
+      </form>
+    </section>
+
+    <section class="card" aria-labelledby="t-pub">
+      <h2 id="t-pub">📅 Publicar un bloque de atención</h2>
+      <div id="wd-errors" class="error-summary" tabindex="-1" hidden></div>
+      <form id="wd-form" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="wd-date">Día *</label>
+          <input id="wd-date" class="form-control" type="date" />
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label" for="wd-start">Desde *</label>
+            <input id="wd-start" class="form-control" type="time" value="08:00" step="900" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="wd-end">Hasta *</label>
+            <input id="wd-end" class="form-control" type="time" value="12:00" step="900" />
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Publicar bloque</button>
+      </form>
+    </section>
+
+    <section class="card" aria-labelledby="t-list">
+      <h2 id="t-list">Bloques publicados</h2>
+      <ul id="wd-list" class="plain-list"></ul>
+    </section>
+  </div>
+</BaseLayout>
+
+<style is:global>
+  .plain-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; }
+  .plain-list > li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.6rem 0.8rem; border: 1px solid var(--border-subtle); border-radius: var(--radius); background: var(--bg); }
+</style>
+
+<script>
+  import { announce } from '../../lib/announce';
+  import { appointments } from '../../lib/data/appointments';
+  import { formatDate, isoDate, onDataChange, toMinutes } from '../../lib/data/db';
+  import { overlappingWorkDay, professionals, publishWorkDay, setDurations, workDays, workDaysOf } from '../../lib/data/professionals';
+  import { esc, validateForm, valueOf } from '../../lib/forms';
+  import { confirmReview } from '../../lib/review';
+  import { requireRole } from '../../lib/session';
+
+  const session = requireRole('profesional');
+  if (session) {
+    const prof = professionals.get(session.userId)!;
+    const num = (id: string) => Number(valueOf(id));
+    (['general', 'interprete', 'control'] as const).forEach((k) => ((document.getElementById(`dur-${k}`) as HTMLInputElement).value = String(prof.durations[k])));
+    (document.getElementById('wd-date') as HTMLInputElement).value = isoDate(4);
+
+    const durForm = document.getElementById('dur-form') as HTMLFormElement;
+    const range = (min: number, max: number) => (v: string) => (Number(v) >= min && Number(v) <= max ? null : `Escribe un número entre ${min} y ${max}.`);
+    durForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const ok = validateForm(
+        durForm,
+        [
+          { id: 'dur-general', label: 'General', check: range(10, 120) },
+          { id: 'dur-interprete', label: 'Con intérprete', check: (v) => range(15, 150)(v) ?? (Number(v) <= num('dur-general') ? 'Debe durar más que la consulta general: la interpretación necesita tiempo extra.' : null) },
+          { id: 'dur-control', label: 'De control', check: range(10, 120) },
+        ],
+        document.getElementById('dur-errors')
+      );
+      if (!ok) return;
+      setDurations(prof.id, { general: num('dur-general'), interprete: num('dur-interprete'), control: num('dur-control') });
+      announce('Duraciones guardadas. Se aplican a las nuevas reservas.');
+    });
+
+    const wdForm = document.getElementById('wd-form') as HTMLFormElement;
+    wdForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const ok = validateForm(
+        wdForm,
+        [
+          { id: 'wd-date', label: 'Día', check: (v) => (!v ? 'Elige el día.' : v < isoDate(0) ? 'Elige hoy o un día futuro.' : null) },
+          { id: 'wd-end', label: 'Hasta', check: (v) => (toMinutes(v) - toMinutes(valueOf('wd-start')) >= 30 ? null : 'La hora final debe ser al menos 30 minutos después de la inicial.') },
+          {
+            id: 'wd-start',
+            label: 'Desde',
+            check: () => {
+              const clash = overlappingWorkDay(prof.id, valueOf('wd-date'), valueOf('wd-start'), valueOf('wd-end'));
+              return clash ? `Se cruza con tu bloque de ${clash.start} a ${clash.end} ese día. Elige otras horas.` : null;
+            },
+          },
+        ],
+        document.getElementById('wd-errors')
+      );
+      if (!ok) return;
+      publishWorkDay(prof.id, valueOf('wd-date'), valueOf('wd-start'), valueOf('wd-end'));
+      announce(`Bloque publicado el ${formatDate(valueOf('wd-date'))}.`);
+    });
+
+    function render() {
+      const today = isoDate(0);
+      document.getElementById('wd-list')!.innerHTML =
+        workDaysOf(prof.id)
+          .filter((w) => w.date >= today)
+          .map((w) => {
+            const booked = appointments.where((a) => a.professionalId === prof.id && a.date === w.date && a.status !== 'CANCELADA' && a.time >= w.start && a.time < w.end).length;
+            return `<li><span><strong>${esc(formatDate(w.date))}</strong> · ${esc(w.start)}–${esc(w.end)}<br><span class="form-hint">${booked} cita(s) reservada(s)</span></span>
+              ${booked ? '' : `<button type="button" class="btn btn-secondary" data-del="${w.id}" aria-label="Quitar bloque del ${esc(formatDate(w.date))}">Quitar</button>`}</li>`;
+          })
+          .join('') || '<li class="form-hint">No tienes bloques publicados.</li>';
+      document.querySelectorAll<HTMLButtonElement>('[data-del]').forEach((b) =>
+        b.addEventListener('click', async () => {
+          if (await confirmReview({ title: '¿Quitar este bloque?', items: [['Bloque', b.closest('li')!.querySelector('strong')!.textContent ?? '']], confirmLabel: 'Quitar bloque' })) {
+            workDays.remove(b.dataset.del!);
+            announce('Bloque quitado.');
+          }
+        })
+      );
+    }
+    render();
+    onDataChange(render);
+  }
+</script>

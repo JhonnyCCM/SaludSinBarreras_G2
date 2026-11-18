@@ -1,0 +1,252 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Agenda del día" section="profesional" description="Agenda del profesional: confirmar, reprogramar o cancelar citas, ficha de apoyos y solicitud de intérprete (RF-09, RF-10, RF-11).">
+  <section class="card mb-3">
+    <span class="badge badge-info mb-1">T2-U2 · RF-09 · T3-U2 · RF-10 · T4-U2 · RF-11</span>
+    <div class="flex-wrap" style="justify-content: space-between;">
+      <h1 id="agenda-title" style="margin: 0;">Agenda del día</h1>
+      <div class="flex-wrap" role="group" aria-label="Cambiar de día">
+        <button type="button" class="btn btn-secondary" id="day-prev">← Día anterior</button>
+        <label class="sr-only" for="day-pick">Fecha de la agenda</label>
+        <input type="date" id="day-pick" class="form-control" style="width: auto;" />
+        <button type="button" class="btn btn-secondary" id="day-next">Día siguiente →</button>
+      </div>
+    </div>
+    <div class="flex-wrap mt-2" id="day-stats"></div>
+  </section>
+
+  <div class="pro-layout">
+    <section class="card" aria-labelledby="agenda-title">
+      <div id="agenda" class="apt-list" aria-live="polite"></div>
+    </section>
+    <div class="pro-side">
+      <section class="card" id="ficha" aria-labelledby="ficha-title" tabindex="-1">
+        <h2 id="ficha-title">🗂️ Ficha del paciente</h2>
+        <p class="form-hint">Elige "Ver ficha" en una cita para preparar la consulta.</p>
+      </section>
+      <section class="card" id="inbox"></section>
+    </div>
+  </div>
+
+  <!-- Reprogramar (RF-09) -->
+  <dialog id="dlg-reprogram" class="ssb-dialog" aria-labelledby="dlg-reprogram-title">
+    <h2 id="dlg-reprogram-title">Reprogramar cita</h2>
+    <form method="dialog" id="reprogram-form" novalidate>
+      <div class="form-group">
+        <label class="form-label" for="rp-date">Nuevo día *</label>
+        <select id="rp-date" class="form-control"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="rp-time">Nueva hora *</label>
+        <select id="rp-time" class="form-control"></select>
+        <span class="form-hint">Solo se muestran horas libres de tu horario publicado.</span>
+      </div>
+      <p class="form-hint">Se avisará al paciente y, si hay, al intérprete.</p>
+      <div class="flex-wrap" style="justify-content: space-between;">
+        <button type="button" class="btn btn-secondary" value="cancel" id="rp-cancel">Cancelar</button>
+        <button type="submit" class="btn btn-primary" value="ok">Reprogramar y avisar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Solicitar intérprete (RF-11) -->
+  <dialog id="dlg-interp" class="ssb-dialog" aria-labelledby="dlg-interp-title">
+    <h2 id="dlg-interp-title">Solicitar intérprete de señas</h2>
+    <p class="form-hint" id="interp-context"></p>
+    <div id="interp-options"></div>
+    <div class="flex-wrap mt-2" style="justify-content: space-between;">
+      <button type="button" class="btn btn-secondary" id="interp-close">Cerrar</button>
+      <button type="button" class="btn btn-primary" id="interp-send">Enviar solicitud</button>
+    </div>
+  </dialog>
+</BaseLayout>
+
+<style is:global>
+  .pro-layout { display: grid; gap: 1rem; grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr); align-items: start; }
+  @media (max-width: 900px) { .pro-layout { grid-template-columns: 1fr; } }
+  .pro-side { display: grid; gap: 1rem; }
+  .ficha-list { margin: 0.4rem 0 0 1.1rem; padding: 0; }
+  .interp-option { display: flex; gap: 0.6rem; align-items: flex-start; padding: 0.6rem; border: 2px solid var(--border-subtle); border-radius: var(--radius); margin-bottom: 0.5rem; cursor: pointer; }
+  .interp-option:has(input:checked) { border-color: var(--primary); }
+</style>
+
+<script>
+  import { announce } from '../../lib/announce';
+  import {
+    availableSlots,
+    bookableDates,
+    cancelAppointment,
+    confirmAppointment,
+    ofProfessionalOn,
+    rescheduleAppointment,
+    appointments,
+    type Appointment,
+  } from '../../lib/data/appointments';
+  import { formatDate, isoDate, onDataChange } from '../../lib/data/db';
+  import { DAY_NAMES, acceptedInterpreterFor, eligibleInterpreters, latestRequestFor, sendRequest } from '../../lib/data/interpreters';
+  import { logAccess } from '../../lib/data/records';
+  import { esc } from '../../lib/forms';
+  import { confirmReview } from '../../lib/review';
+  import { requireRole } from '../../lib/session';
+  import { DISABILITY_LABELS, getPatient } from '../../lib/store';
+  import { SUPPORTS } from '../../lib/supports';
+  import { appointmentCard, mountInbox } from '../../lib/ui';
+
+  const session = requireRole('profesional');
+  if (session) {
+    const params = new URLSearchParams(location.search);
+    let day = params.get('fecha') ?? isoDate(0);
+    const picker = document.getElementById('day-pick') as HTMLInputElement;
+    const refreshInbox = mountInbox(document.getElementById('inbox')!, 'profesional', session.userId);
+
+    function actionsFor(a: Appointment): string {
+      const b: string[] = [`<button type="button" class="btn btn-secondary" data-act="ficha" data-id="${a.id}">🗂️ Ver ficha</button>`];
+      if (a.status === 'RESERVADA') b.push(`<button type="button" class="btn btn-success" data-act="confirm" data-id="${a.id}">✅ Confirmar</button>`);
+      if (a.status === 'RESERVADA' || a.status === 'CONFIRMADA') {
+        if (a.type === 'interprete' && !acceptedInterpreterFor(a.id) && latestRequestFor(a.id)?.status !== 'PENDIENTE') {
+          b.push(`<button type="button" class="btn btn-accent" data-act="interp" data-id="${a.id}">🤟 Solicitar intérprete</button>`);
+        }
+        b.push(`<button type="button" class="btn btn-secondary" data-act="reprogram" data-id="${a.id}">📅 Reprogramar</button>`);
+        b.push(`<button type="button" class="btn btn-danger" data-act="cancel" data-id="${a.id}">Cancelar</button>`);
+      }
+      if (a.status === 'CONFIRMADA' || a.status === 'EN_CURSO') {
+        b.push(`<a class="btn btn-primary" href="/profesional/consulta?cita=${a.id}">🎥 Iniciar consulta</a>`);
+      }
+      if (a.status === 'ATENDIDA') b.push(`<a class="btn btn-secondary" href="/profesional/resumen?cita=${a.id}">✍️ Resumen</a>`);
+      return b.join('');
+    }
+
+    function render() {
+      picker.value = day;
+      const list = ofProfessionalOn(session!.userId, day);
+      document.getElementById('agenda-title')!.textContent = day === isoDate(0) ? 'Agenda de hoy' : `Agenda del ${formatDate(day)}`;
+      const count = (s: Appointment['status']) => list.filter((a) => a.status === s).length;
+      document.getElementById('day-stats')!.innerHTML = `
+        <span class="badge badge-info">${list.length} cita(s)</span>
+        <span class="badge badge-warning">${count('RESERVADA')} por confirmar</span>
+        <span class="badge badge-success">${count('CONFIRMADA')} confirmadas</span>
+        <span class="badge">${list.filter((a) => a.type === 'interprete').length} con intérprete</span>`;
+      document.getElementById('agenda')!.innerHTML = list.length
+        ? list.map((a) => appointmentCard(a, 'profesional', actionsFor(a))).join('')
+        : '<p>No tienes citas este día.</p>';
+      refreshInbox();
+    }
+
+    // ---------- Ficha del paciente (RF-10) ----------
+    function showFicha(id: string) {
+      const a = appointments.get(id)!;
+      const p = getPatient(a.patientId)!;
+      const brief = p.aiAccessibilityBrief;
+      logAccess(p.id, session!.name, 'Consultó la ficha de apoyos antes de la consulta');
+      const box = document.getElementById('ficha')!;
+      box.innerHTML = `
+        <h2 id="ficha-title">🗂️ ${esc(p.fullName)}</h2>
+        <p class="form-hint">${p.age} años · Cita ${esc(a.date)} ${esc(a.time)}</p>
+        <p><strong>Motivo:</strong> ${esc(a.reason)}</p>
+        <p><strong>Discapacidad:</strong> ${esc(p.disabilities.map((d) => DISABILITY_LABELS[d]).join(', '))}</p>
+        <p><strong>Cómo comunicarse:</strong> ${esc(p.disabilityDetails)}</p>
+        <strong>Apoyos activos en la consulta:</strong>
+        <ul class="ficha-list">${p.supports.map((k) => `<li>${esc(SUPPORTS[k].label)}</li>`).join('')}</ul>
+        <div class="alert-box mt-2"><strong>Lista de verificación (asistente IA):</strong>
+          <ul class="ficha-list">${brief.professionalChecklist.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>
+        </div>
+        <p class="form-hint mt-1">Contacto de apoyo: ${esc(p.supportContact)}</p>`;
+      box.focus();
+      announce(`Ficha de ${p.fullName} abierta.`);
+    }
+
+    // ---------- Reprogramar (RF-09) ----------
+    const dlgRp = document.getElementById('dlg-reprogram') as HTMLDialogElement;
+    const rpDate = document.getElementById('rp-date') as HTMLSelectElement;
+    const rpTime = document.getElementById('rp-time') as HTMLSelectElement;
+    let rpId = '';
+    const fillTimes = () => {
+      const a = appointments.get(rpId)!;
+      const slots = availableSlots(a.professionalId, rpDate.value, a.type, a.id);
+      rpTime.innerHTML = slots.map((s) => `<option>${s}</option>`).join('') || '<option value="">Sin horas libres</option>';
+    };
+    rpDate.addEventListener('change', fillTimes);
+    document.getElementById('rp-cancel')!.addEventListener('click', () => dlgRp.close());
+    document.getElementById('reprogram-form')!.addEventListener('submit', (e) => {
+      if (!rpTime.value) {
+        e.preventDefault();
+        announce('Elige un día con horas libres.', 'assertive');
+        return;
+      }
+      rescheduleAppointment(rpId, rpDate.value, rpTime.value, acceptedInterpreterFor(rpId)?.id);
+      announce(`Cita reprogramada para el ${formatDate(rpDate.value)} a las ${rpTime.value}. Se avisó al paciente.`);
+    });
+
+    // ---------- Solicitar intérprete (RF-11) ----------
+    const dlgInt = document.getElementById('dlg-interp') as HTMLDialogElement;
+    let intId = '';
+    document.getElementById('interp-close')!.addEventListener('click', () => dlgInt.close());
+    document.getElementById('interp-send')!.addEventListener('click', () => {
+      const chosen = dlgInt.querySelector<HTMLInputElement>('input[name="interp"]:checked');
+      if (!chosen) return announce('Elige un intérprete de la lista.', 'assertive');
+      sendRequest(intId, chosen.value, session!.userId);
+      dlgInt.close();
+      announce('Solicitud enviada al intérprete.');
+    });
+
+    document.getElementById('agenda')!.addEventListener('click', async (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-act]');
+      if (!btn) return;
+      const id = btn.dataset.id!;
+      const a = appointments.get(id)!;
+      const p = getPatient(a.patientId);
+      switch (btn.dataset.act) {
+        case 'ficha':
+          showFicha(id);
+          break;
+        case 'confirm':
+          confirmAppointment(id);
+          announce(`Cita de ${p?.fullName} confirmada. Se avisó al paciente.`);
+          break;
+        case 'cancel': {
+          const ok = await confirmReview({
+            title: '¿Cancelar esta cita?',
+            items: [['Paciente', p?.fullName ?? ''], ['Fecha', `${formatDate(a.date)} ${a.time}`]],
+            confirmLabel: 'Sí, cancelar y avisar',
+            warning: 'Se avisará al paciente y al intérprete.',
+          });
+          if (ok) {
+            cancelAppointment(id, acceptedInterpreterFor(id)?.id);
+            announce('Cita cancelada.');
+          }
+          break;
+        }
+        case 'reprogram':
+          rpId = id;
+          rpDate.innerHTML = bookableDates(a.professionalId).map((d) => `<option value="${d}">${esc(formatDate(d))}</option>`).join('');
+          rpDate.value = a.date;
+          fillTimes();
+          dlgRp.showModal();
+          break;
+        case 'interp': {
+          intId = id;
+          const options = eligibleInterpreters(a);
+          document.getElementById('interp-context')!.textContent = `${formatDate(a.date)} a las ${a.time} (${a.durationMin} min). Solo aparecen intérpretes con acreditación vigente y libres en ese horario.`;
+          document.getElementById('interp-options')!.innerHTML = options.length
+            ? `<fieldset style="border:none;padding:0;margin:0"><legend class="sr-only">Intérpretes disponibles</legend>${options
+                .map(
+                  (i, n) => `<label class="interp-option"><input type="radio" name="interp" value="${i.id}" ${n === 0 ? 'checked' : ''}/>
+                  <span><strong>${esc(i.fullName)}</strong><br><span class="form-hint">${esc(i.accreditationCode)} · vigente hasta ${esc(i.validUntil)} · ${esc(i.days.map((d) => DAY_NAMES[d].slice(0, 3)).join(', '))} ${esc(i.from)}–${esc(i.to)}</span></span></label>`
+                )
+                .join('')}</fieldset>`
+            : '<p class="alert-box warning">No hay intérpretes disponibles en ese horario. Reprograma la cita o intenta más tarde.</p>';
+          dlgInt.showModal();
+          break;
+        }
+      }
+    });
+
+    picker.addEventListener('change', () => { day = picker.value || isoDate(0); render(); });
+    document.getElementById('day-prev')!.addEventListener('click', () => { day = isoDate(-1, new Date(`${day}T12:00:00`)); render(); });
+    document.getElementById('day-next')!.addEventListener('click', () => { day = isoDate(1, new Date(`${day}T12:00:00`)); render(); });
+    render();
+    onDataChange(render);
+  }
+</script>

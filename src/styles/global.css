@@ -743,3 +743,17 @@ kbd {
 }
 .reminder.pendiente { border-color: var(--info-border); }
 .reminder.omitida { border-color: var(--danger-border); }
+
+/* Opciones tipo píldora para grupos de radio (navegables con flechas) */
+.radio-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  cursor: pointer;
+  min-height: 36px;
+}
+.radio-chip:has(input:checked) { border-color: var(--primary); font-weight: 700; }

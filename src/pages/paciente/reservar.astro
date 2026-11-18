@@ -1,0 +1,167 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Reservar cita" section="paciente" description="Reserva de cita virtual en horarios publicados (RF-02, FORM-02).">
+  <section class="card mb-3">
+    <span class="badge badge-info mb-1">T2-U1 · RF-02 · FORM-02</span>
+    <h1>Reservar una cita</h1>
+    <p class="form-hint" style="margin: 0;">4 pasos: profesional, día, hora y confirmar. Usa las flechas para moverte entre las opciones.</p>
+  </section>
+
+  <div id="book-errors" class="error-summary" tabindex="-1" hidden></div>
+
+  <form id="book-form" class="card" novalidate>
+    <div class="form-group">
+      <label class="form-label" for="book-prof">1. Profesional y especialidad *</label>
+      <select class="form-control" id="book-prof"></select>
+    </div>
+
+    <div id="book-type-note" class="alert-box mb-2"></div>
+
+    <fieldset class="choice-group">
+      <legend class="form-label">2. Día *</legend>
+      <div id="book-dates" class="choice-grid" role="radiogroup" aria-label="Días con horario disponible"></div>
+    </fieldset>
+
+    <fieldset class="choice-group mt-2">
+      <legend class="form-label">3. Hora *</legend>
+      <div id="book-slots" class="choice-grid"></div>
+    </fieldset>
+
+    <div class="form-group mt-2">
+      <label class="form-label" for="book-reason">Motivo de la consulta *</label>
+      <textarea class="form-control" id="book-reason" rows="3" aria-describedby="book-reason-hint"></textarea>
+      <span class="form-hint" id="book-reason-hint">En pocas palabras. Ejemplo: dolor de garganta desde hace 3 días.</span>
+    </div>
+
+    <button type="submit" class="btn btn-primary">4. Revisar y confirmar</button>
+  </form>
+
+  <section id="book-done" class="card" hidden>
+    <div class="alert-box success" role="status" tabindex="-1" id="book-done-msg"></div>
+    <div class="flex-wrap mt-2">
+      <a class="btn btn-primary" id="book-questions-link" href="/paciente/preguntas">❓ Preparar mis preguntas</a>
+      <a class="btn btn-secondary" href="/paciente">Volver a mi panel</a>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .choice-group { border: none; padding: 0; margin: 0; }
+  .choice-grid { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.4rem; }
+  #book-done[hidden] { display: none; }
+</style>
+
+<script>
+  import { triggerVisualAlert } from '../../lib/accessibility';
+  import { availableSlots, bookAppointment, bookableDates } from '../../lib/data/appointments';
+  import { formatDate } from '../../lib/data/db';
+  import { CONSULT_TYPE_LABELS, professionals, type ConsultType } from '../../lib/data/professionals';
+  import { autosaveForm, clearDraft } from '../../lib/autosave';
+  import { esc, rules, validateForm, valueOf } from '../../lib/forms';
+  import { confirmReview } from '../../lib/review';
+  import { requireRole } from '../../lib/session';
+  import { getPatient } from '../../lib/store';
+
+  const session = requireRole('paciente');
+  if (session) {
+    const patient = getPatient(session.userId)!;
+    const form = document.getElementById('book-form') as HTMLFormElement;
+    const summary = document.getElementById('book-errors') as HTMLElement;
+    const profSel = document.getElementById('book-prof') as HTMLSelectElement;
+    // WCAG 3.3.7: el tipo de consulta sale de los apoyos del perfil; no se vuelve a preguntar.
+    const type: ConsultType = patient.supports.includes('interpreter') ? 'interprete' : 'general';
+
+    profSel.innerHTML = professionals.all().map((p) => `<option value="${p.id}">${esc(p.name)} — ${esc(p.specialty)}</option>`).join('');
+
+    const radio = (name: string, value: string, label: string, checked: boolean) =>
+      `<label class="radio-chip"><input type="radio" name="${name}" id="${name}-${value.replace(/[^\w-]/g, '')}" value="${esc(value)}" ${checked ? 'checked' : ''}/> ${esc(label)}</label>`;
+    const selected = (name: string) => form.querySelector<HTMLInputElement>(`input[name="${name}"]:checked`)?.value ?? '';
+
+    function renderNote() {
+      const prof = professionals.get(profSel.value)!;
+      document.getElementById('book-type-note')!.innerHTML =
+        `<strong>Tipo de consulta: ${esc(CONSULT_TYPE_LABELS[type])} (${prof.durations[type]} min).</strong> ` +
+        (type === 'interprete'
+          ? 'Lo elegimos porque tu perfil tiene el apoyo de intérprete; el profesional lo solicitará por ti.'
+          : 'Tus apoyos (subtítulos, lectura en voz alta, etc.) se activarán solos en la videoconsulta.');
+    }
+
+    function renderDates() {
+      const dates = bookableDates(profSel.value).filter((d) => availableSlots(profSel.value, d, type).length);
+      const current = selected('book-date');
+      document.getElementById('book-dates')!.innerHTML = dates.length
+        ? dates.map((d, i) => radio('book-date', d, formatDate(d), current ? current === d : i === 0)).join('')
+        : '<p class="form-hint">Este profesional no tiene horarios libres. Elige otro.</p>';
+      form.querySelectorAll('input[name="book-date"]').forEach((r) => r.addEventListener('change', renderSlots));
+      renderSlots();
+    }
+
+    function renderSlots() {
+      const date = selected('book-date');
+      const slots = date ? availableSlots(profSel.value, date, type) : [];
+      const current = selected('book-slot');
+      const box = document.getElementById('book-slots')!;
+      box.setAttribute('role', 'radiogroup');
+      box.setAttribute('aria-label', date ? `Horas libres el ${formatDate(date)}` : 'Horas libres');
+      box.innerHTML = slots.length
+        ? slots.map((s) => radio('book-slot', s, s, current === s)).join('')
+        : '<p class="form-hint">Elige primero un día.</p>';
+    }
+
+    profSel.addEventListener('change', () => {
+      renderNote();
+      renderDates();
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const ok = validateForm(
+        form,
+        [
+          { id: form.querySelector('input[name="book-date"]')?.id ?? 'book-prof', label: 'Día', check: () => (selected('book-date') ? null : 'Elige un día con horario disponible.') },
+          { id: form.querySelector('input[name="book-slot"]')?.id ?? 'book-slots', label: 'Hora', check: () => (selected('book-slot') ? null : 'Elige una de las horas libres.') },
+          { id: 'book-reason', label: 'Motivo', check: rules.minLength(5, 'Cuéntanos en pocas palabras por qué pides la cita.') },
+        ],
+        summary
+      );
+      if (!ok) return;
+      const prof = professionals.get(profSel.value)!;
+      const date = selected('book-date');
+      const time = selected('book-slot');
+      const confirmed = await confirmReview({
+        title: 'Revisa tu cita antes de confirmar',
+        items: [
+          ['Profesional', `${prof.name} (${prof.specialty})`],
+          ['Día', formatDate(date)],
+          ['Hora', `${time} (${prof.durations[type]} min)`],
+          ['Tipo', CONSULT_TYPE_LABELS[type]],
+          ['Motivo', valueOf('book-reason')],
+        ],
+        confirmLabel: 'Confirmar reserva',
+      });
+      if (!confirmed) return;
+      // Revalidar por si otra persona tomó el horario mientras revisabas
+      if (!availableSlots(prof.id, date, type).includes(time)) {
+        validateForm(form, [{ id: 'book-reason', label: 'Hora', check: () => 'Ese horario acaba de ocuparse. Elige otra hora.' }], summary);
+        renderSlots();
+        return;
+      }
+      const apt = bookAppointment({ patientId: patient.id, professionalId: prof.id, date, time, type, reason: valueOf('book-reason') });
+      clearDraft('reservar-cita');
+      form.hidden = true;
+      const done = document.getElementById('book-done')!;
+      done.hidden = false;
+      const msg = document.getElementById('book-done-msg')!;
+      msg.innerHTML = `<strong>✅ Cita reservada:</strong> ${esc(formatDate(date))} a las ${esc(time)} con ${esc(prof.name)}. Te avisaremos cuando la confirme.`;
+      msg.focus();
+      (document.getElementById('book-questions-link') as HTMLAnchorElement).href = `/paciente/preguntas?cita=${apt.id}`;
+      triggerVisualAlert(`Cita reservada para el ${formatDate(date)} a las ${time}.`, { speak: patient.supports.includes('tts') });
+    });
+
+    renderNote();
+    autosaveForm(form, 'reservar-cita', renderDates);
+    renderDates();
+  }
+</script>

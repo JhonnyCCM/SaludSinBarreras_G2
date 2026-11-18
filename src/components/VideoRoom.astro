@@ -1,0 +1,542 @@
+---
+// Videoconsulta accesible compartida por paciente, profesional e intérprete.
+// RF-03 verificación previa · RF-12 panel de participantes y apoyos · RF-21 guía de encuadre
+// RF-22 turno de palabra y prioridad del video del intérprete · F3: subtítulos, transcripción,
+// ventana del intérprete y atajos Alt+Shift (S, T, I, M, V, P).
+interface Props {
+  role: 'paciente' | 'profesional' | 'interprete';
+}
+const { role } = Astro.props;
+---
+
+<div class="video-room" data-video-room data-role={role}>
+  <div id="room-empty" class="alert-box warning" hidden></div>
+
+  <!-- 1. Verificación previa (RF-03 / RF-21) -->
+  <section id="precheck" class="card" aria-labelledby="precheck-title" hidden>
+    <h2 id="precheck-title">Antes de entrar: prueba tu cámara, micrófono y conexión</h2>
+    <p class="form-hint" id="precheck-appointment"></p>
+    <div class="precheck-grid">
+      <div class="preview-box">
+        <video id="precheck-video" autoplay muted playsinline aria-label="Vista previa de tu cámara"></video>
+        {role === 'interprete' && (
+          <div class="framing-guide" aria-hidden="true">
+            <span class="guide-head"></span>
+            <span class="guide-torso"></span>
+          </div>
+        )}
+        <p id="precheck-novideo" class="preview-placeholder">La vista previa aparecerá al permitir la cámara.</p>
+      </div>
+      <ul class="check-list" aria-live="polite">
+        <li id="chk-camera"><span aria-hidden="true">⏳</span> Cámara: sin probar</li>
+        <li id="chk-mic"><span aria-hidden="true">⏳</span> Micrófono: sin probar</li>
+        <li id="chk-net"><span aria-hidden="true">⏳</span> Conexión: comprobando…</li>
+        <li id="chk-agent"><span aria-hidden="true">⏳</span> Agente de subtítulos y señas: comprobando…</li>
+        {role === 'interprete' && (
+          <li id="chk-framing"><span aria-hidden="true">ℹ️</span> Encuadre: tus manos, rostro y torso deben quedar dentro de la guía.</li>
+        )}
+      </ul>
+    </div>
+    <div class="mic-meter" aria-hidden="true"><span id="mic-level"></span></div>
+    <div class="flex-wrap mt-2">
+      <button type="button" class="btn btn-secondary" id="btn-test-devices">🎥 Probar cámara y micrófono</button>
+      <button type="button" class="btn btn-primary" id="btn-enter-room">Entrar a la sala</button>
+    </div>
+    <p class="form-hint">Si no puedes usar la cámara, puedes entrar igual: los subtítulos y el chat siguen funcionando.</p>
+  </section>
+
+  <!-- 2. Sala -->
+  <section id="room" aria-labelledby="room-title" hidden>
+    <div class="flex-wrap room-head">
+      <h2 id="room-title">Videoconsulta</h2>
+      <span class="badge" id="room-mode-badge"></span>
+      <span class="badge badge-info" id="turn-indicator" role="status">Turno de palabra: libre</span>
+    </div>
+
+    <div id="support-warning" class="alert-box warning mb-2" role="alert" hidden></div>
+
+    <div class="room-layout">
+      <div class="stage">
+        <div class="tiles" id="tiles"></div>
+        <div class="subtitle-bar" id="subtitle-bar" aria-hidden="true"><span id="subtitle-text">Los subtítulos aparecerán aquí.</span></div>
+      </div>
+
+      <aside class="side">
+        <section class="side-panel" aria-labelledby="signs-title">
+          <h3 id="signs-title">🤟 Señas (glosas LSEc)</h3>
+          <div id="sign-current" class="sign-current" aria-hidden="true">—</div>
+          <ol id="sign-strip" class="sign-strip" aria-label="Glosas de la última frase"></ol>
+          <p id="sign-expression" class="form-hint"></p>
+          <p id="sign-meta" class="form-hint"></p>
+        </section>
+
+        <section class="side-panel" id="transcript-panel" aria-labelledby="transcript-title">
+          <h3 id="transcript-title">📝 Transcripción</h3>
+          <ol id="transcript-list" class="transcript-list"></ol>
+        </section>
+
+        <section class="side-panel" aria-labelledby="participants-title">
+          <h3 id="participants-title">👥 Participantes</h3>
+          <ul id="participants" class="participants"></ul>
+          <button type="button" class="btn btn-secondary" id="btn-simulate-others">Simular que los demás se conectan</button>
+        </section>
+      </aside>
+    </div>
+
+    <!-- Entrada de lo que se dice: dictado real o texto (paciente con discapacidad del habla) -->
+    <form id="speak-form" class="speak-form" autocomplete="off">
+      <label for="speak-input" class="form-label">Lo que dices en la consulta</label>
+      <div class="flex-wrap">
+        <input id="speak-input" class="form-control" style="flex: 1; min-width: 14rem;" placeholder="Escribe o dicta una frase" />
+        <button type="button" class="btn btn-secondary" id="btn-dictate" aria-pressed="false">🎙️ Dictar</button>
+        <button type="submit" class="btn btn-primary">Enviar a la sala</button>
+      </div>
+      <p class="form-hint" id="dictate-hint"></p>
+    </form>
+
+    <div class="controls" role="toolbar" aria-label="Controles de la videoconsulta">
+      <button type="button" class="btn btn-secondary" data-room-action="mic" aria-pressed="true">🎙️ Micrófono <kbd>Alt+Shift+M</kbd></button>
+      <button type="button" class="btn btn-secondary" data-room-action="camera" aria-pressed="true">🎥 Cámara <kbd>Alt+Shift+V</kbd></button>
+      <button type="button" class="btn btn-secondary" data-room-action="subtitles" aria-pressed="true">💬 Subtítulos <kbd>Alt+Shift+S</kbd></button>
+      <button type="button" class="btn btn-secondary" data-room-action="transcript" aria-pressed="false">📝 Transcripción <kbd>Alt+Shift+T</kbd></button>
+      <button type="button" class="btn btn-secondary" data-room-action="interpreter" aria-pressed="false">🤟 Fijar intérprete <kbd>Alt+Shift+I</kbd></button>
+      <button type="button" class="btn btn-accent" data-room-action="raiseHand">✋ Pedir la palabra <kbd>Alt+Shift+P</kbd></button>
+      <button type="button" class="btn btn-secondary" id="btn-reader" aria-pressed="false">🔊 Leer en voz alta lo que se dice</button>
+      <button type="button" class="btn btn-secondary" id="btn-weak-network" aria-pressed="false">📶 Simular conexión débil</button>
+      {role === 'profesional' && <button type="button" class="btn btn-secondary" id="btn-demo-script">▶️ Guion de ejemplo</button>}
+    </div>
+  </section>
+</div>
+
+<style is:global>
+  /* Global: las piezas de la sala se crean con JavaScript y no reciben el alcance de Astro */
+  .video-room [hidden] { display: none !important; }
+  .precheck-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
+  .preview-box { position: relative; background: #0f172a; border-radius: var(--radius); aspect-ratio: 16 / 10; overflow: hidden; display: grid; place-items: center; }
+  .preview-box video { width: 100%; height: 100%; object-fit: cover; }
+  .preview-placeholder { position: absolute; color: #e2e8f0; text-align: center; padding: 1rem; margin: 0; }
+  .framing-guide { position: absolute; inset: 8% 22%; border: 3px dashed #facc15; border-radius: 40% 40% 12px 12px; }
+  .guide-head { position: absolute; top: 6%; left: 50%; width: 30%; aspect-ratio: 1; transform: translateX(-50%); border: 3px dashed #facc15; border-radius: 50%; }
+  .guide-torso { position: absolute; bottom: 0; left: 12%; right: 12%; height: 45%; border-top: 3px dashed #facc15; }
+  .check-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; font-weight: 600; }
+  .mic-meter { height: 10px; background: var(--surface-alt); border-radius: 999px; overflow: hidden; margin-top: 0.75rem; border: 1px solid var(--border-subtle); }
+  .mic-meter span { display: block; height: 100%; width: 0; background: var(--success-border); transition: width 0.1s linear; }
+  .room-head { justify-content: space-between; margin-bottom: 0.75rem; }
+  .room-head h2 { margin: 0; }
+  .room-layout { display: grid; gap: 1rem; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); }
+  @media (max-width: 900px) { .room-layout { grid-template-columns: 1fr; } }
+  .stage { display: grid; gap: 0.5rem; }
+  .tiles { display: grid; gap: 0.6rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
+  .tile { position: relative; background: #1e293b; color: #f8fafc; border-radius: var(--radius); min-height: 170px; display: grid; place-items: center; overflow: hidden; border: 3px solid transparent; }
+  .tile video { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; }
+  .tile .tile-avatar { font-size: 2.6rem; }
+  .tile .tile-label { position: absolute; left: 0.5rem; bottom: 0.5rem; background: rgba(15, 23, 42, 0.85); padding: 0.2rem 0.55rem; border-radius: 6px; font-weight: 700; font-size: 0.9rem; }
+  .tile.speaking { border-color: #22c55e; }
+  .tile.has-turn { border-color: #facc15; }
+  .tile.audio-only video { display: none; }
+  /* Ventana del intérprete fija y grande (F3 · WCAG 1.2.6): ocupa la fila completa, sin tapar otros elementos (2.4.11) */
+  html[data-pin-interpreter='true'] .tile.interpreter-tile,
+  .tile.interpreter-tile.pinned { order: -1; grid-column: 1 / -1; min-height: 300px; border-color: #38bdf8; }
+  .subtitle-bar { background: #000; color: #fff; font-size: 1.25rem; font-weight: 700; padding: 0.6rem 0.9rem; border-radius: var(--radius); min-height: 3rem; }
+  .subtitle-bar.off { display: none; }
+  .side { display: grid; gap: 0.75rem; align-content: start; }
+  .side-panel { background: var(--surface); border: 2px solid var(--border-subtle); border-radius: var(--radius); padding: 0.75rem; }
+  .side-panel h3 { font-size: 1rem; margin-bottom: 0.4rem; }
+  .sign-current { font-size: 1.9rem; font-weight: 800; text-align: center; padding: 0.75rem; border-radius: var(--radius); background: var(--surface-alt); min-height: 4rem; }
+  .sign-strip { list-style: none; display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0; margin: 0.5rem 0 0; }
+  .sign-strip li { padding: 0.2rem 0.5rem; border: 2px solid var(--border-subtle); border-radius: 6px; font-weight: 700; font-size: 0.9rem; background: var(--bg); }
+  .sign-strip li.dactilologia { border-style: dashed; }
+  .sign-strip li.active { border-color: var(--primary); background: var(--primary); color: var(--primary-text); }
+  .transcript-list { list-style: none; padding: 0; margin: 0; max-height: 220px; overflow-y: auto; display: grid; gap: 0.35rem; font-size: 0.92rem; }
+  #transcript-panel.off { display: none; }
+  .participants { list-style: none; padding: 0; margin: 0 0 0.5rem; display: grid; gap: 0.4rem; }
+  .participants li { display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
+  .speak-form { margin-top: 1rem; }
+  .controls { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; padding-top: 1rem; border-top: 2px solid var(--border-subtle); }
+  .controls kbd { font-size: 0.7rem; }
+</style>
+
+<script>
+  import { applyAccessibilityState, loadAccessibilityState, speakText, triggerVisualAlert } from '../lib/accessibility';
+  import { announce } from '../lib/announce';
+  import { agentBaseUrl } from '../lib/ai-harness/providers';
+  import { appointments, isActive, ofPatient, ofProfessional, type Appointment } from '../lib/data/appointments';
+  import { appendTranscript, transcripts } from '../lib/data/consultation';
+  import { isoDate } from '../lib/data/db';
+  import { acceptedInterpreterFor, requestsOf } from '../lib/data/interpreters';
+  import { professionals } from '../lib/data/professionals';
+  import { esc } from '../lib/forms';
+  import { connectRoom, type RoomConnection, type RoomEvent, type Traduccion } from '../lib/realtime';
+  import { getSession, requireRole, type Role } from '../lib/session';
+  import { getPatient } from '../lib/store';
+
+  const root = document.querySelector<HTMLElement>('[data-video-room]')!;
+  const role = root.dataset.role as Role;
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+
+  const PICTO: Record<string, string> = {
+    pastilla: '💊', jarabe: '🧴', gotas: '💧', inyeccion: '💉', inhalador: '🌬️', dolor: '🤕', alerta: '⚠️', agua: '🚰',
+    comer: '🍽️', luna: '🌙', sol: '☀️', reloj: '⏰', calendario: '📅', medico: '🩺', corazon: '❤️', ojo: '👁️',
+    manos: '🤟', termometro: '🌡️', laboratorio: '🧪', hospital: '🏥', receta: '📄', cama: '🛏️',
+  };
+
+  interface Participant { key: Role; name: string; avatar: string; status: 'esperando' | 'conectado'; supports: string[] }
+
+  function pickAppointment(): Appointment | undefined {
+    const id = new URLSearchParams(location.search).get('cita');
+    if (id) return appointments.get(id);
+    const s = getSession()!;
+    const today = isoDate(0);
+    let list: Appointment[] = [];
+    if (role === 'paciente') list = ofPatient(s.userId);
+    if (role === 'profesional') list = ofProfessional(s.userId);
+    if (role === 'interprete') list = requestsOf(s.userId).filter((r) => r.status === 'ACEPTADA').map((r) => appointments.get(r.appointmentId)!).filter(Boolean);
+    return list.filter((a) => isActive(a) && a.date >= today).sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`))[0];
+  }
+
+  function init() {
+    const session = requireRole(role);
+    if (!session) return;
+    const apt = pickAppointment();
+    if (!apt) {
+      const empty = $('room-empty');
+      empty.hidden = false;
+      empty.textContent = 'No tienes una videoconsulta próxima. Cuando tengas una cita confirmada aparecerá aquí.';
+      return;
+    }
+    const patient = getPatient(apt.patientId);
+    const prof = professionals.get(apt.professionalId);
+    const interp = acceptedInterpreterFor(apt.id);
+    const needsInterpreter = apt.type === 'interprete' || Boolean(patient?.supports.includes('interpreter'));
+
+    const participants: Participant[] = [
+      { key: 'paciente', name: patient?.fullName ?? 'Paciente', avatar: '🧑', status: 'esperando', supports: patient?.supports ?? [] },
+      { key: 'profesional', name: prof?.name ?? 'Profesional', avatar: '🩺', status: 'esperando', supports: [] },
+    ];
+    if (needsInterpreter) {
+      participants.push({ key: 'interprete', name: interp?.fullName ?? 'Intérprete sin asignar', avatar: '🤟', status: 'esperando', supports: [] });
+    }
+    const me = participants.find((p) => p.key === role) ?? participants[0];
+    me.status = 'conectado';
+
+    // ---------- Verificación previa ----------
+    $('precheck').hidden = false;
+    $('precheck-appointment').textContent = `${apt.specialty} · ${apt.date} a las ${apt.time} · ${patient?.fullName ?? ''} con ${prof?.name ?? ''}`;
+    let stream: MediaStream | null = null;
+
+    const setCheck = (id: string, ok: boolean | null, text: string) => {
+      $(id).innerHTML = `<span aria-hidden="true">${ok === null ? 'ℹ️' : ok ? '✅' : '⚠️'}</span> ${esc(text)}`;
+    };
+
+    const conn = (navigator as Navigator & { connection?: { effectiveType?: string } }).connection;
+    setCheck('chk-net', navigator.onLine, navigator.onLine ? `Conexión: en línea${conn?.effectiveType ? ` (${conn.effectiveType})` : ''}` : 'Conexión: sin internet');
+    const t0 = performance.now();
+    fetch(`${agentBaseUrl()}/salud`, { signal: AbortSignal.timeout(1500) })
+      .then((r) => setCheck('chk-agent', r.ok, `Agente Rust conectado (${Math.round(performance.now() - t0)} ms): subtítulos y señas en tiempo real`))
+      .catch(() => setCheck('chk-agent', null, 'Agente Rust apagado: se usará el modo local del navegador'));
+
+    $('btn-test-devices').addEventListener('click', async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        const v = $<HTMLVideoElement>('precheck-video');
+        v.srcObject = stream;
+        $('precheck-novideo').hidden = true;
+        setCheck('chk-camera', true, 'Cámara: funcionando');
+        setCheck('chk-mic', true, 'Micrófono: habla para ver el nivel');
+        const ctx = new AudioContext();
+        const analyser = ctx.createAnalyser();
+        ctx.createMediaStreamSource(stream).connect(analyser);
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        const loop = () => {
+          analyser.getByteFrequencyData(data);
+          const level = Math.min(100, (data.reduce((s, x) => s + x, 0) / data.length) * 1.6);
+          $('mic-level').style.width = `${level}%`;
+          if (!$('precheck').hidden) requestAnimationFrame(loop);
+        };
+        loop();
+        announce('Cámara y micrófono funcionando.');
+      } catch {
+        setCheck('chk-camera', false, 'Cámara: sin permiso o no disponible');
+        setCheck('chk-mic', false, 'Micrófono: sin permiso o no disponible');
+        announce('No se pudo usar la cámara o el micrófono. Puedes entrar igual.', 'assertive');
+      }
+    });
+
+    $('btn-enter-room').addEventListener('click', () => enterRoom());
+
+    // ---------- Sala ----------
+    let connection: RoomConnection | null = null;
+    let readerOn = loadAccessibilityState().ttsFocusAuto;
+    let micOn = true;
+    let camOn = true;
+    let weak = false;
+    const turnQueue: string[] = [];
+    let currentTurn = '';
+
+    function renderTiles() {
+      $('tiles').innerHTML = participants
+        .map((p) => {
+          const isInterp = p.key === 'interprete';
+          return `<div class="tile ${isInterp ? 'interpreter-tile' : ''} ${weak && !isInterp ? 'audio-only' : ''} ${currentTurn === p.name ? 'has-turn' : ''}" data-tile="${p.key}">
+            ${p.key === role && stream && camOn ? '<video autoplay muted playsinline></video>' : ''}
+            <span class="tile-avatar" aria-hidden="true">${p.status === 'conectado' ? p.avatar : '⏳'}</span>
+            <span class="tile-label">${esc(p.name)}${p.key === role ? ' (tú)' : ''}${weak && !isInterp ? ' · solo audio' : ''}</span>
+          </div>`;
+        })
+        .join('');
+      const v = document.querySelector<HTMLVideoElement>(`[data-tile="${role}"] video`);
+      if (v && stream) v.srcObject = stream;
+    }
+
+    function renderParticipants() {
+      $('participants').innerHTML = participants
+        .map((p) => `<li><span>${p.avatar} <strong>${esc(p.name)}</strong></span><span class="badge ${p.status === 'conectado' ? 'badge-success' : 'badge-warning'}">${p.status}</span></li>`)
+        .join('');
+      // RF-12: avisar si algún apoyo requerido no está activo
+      const warnings: string[] = [];
+      const st = loadAccessibilityState();
+      if (needsInterpreter && !interp) warnings.push('La cita requiere intérprete y aún no hay uno asignado.');
+      else if (needsInterpreter && participants.find((p) => p.key === 'interprete')?.status !== 'conectado') warnings.push('El intérprete todavía no se conecta.');
+      if (patient?.supports.includes('subtitles') && !st.subtitlesDefault) warnings.push('El paciente necesita subtítulos y están desactivados.');
+      const box = $('support-warning');
+      box.hidden = warnings.length === 0;
+      box.textContent = warnings.length ? `⚠️ ${warnings.join(' ')}` : '';
+    }
+
+    function renderTurn() {
+      $('turn-indicator').textContent = currentTurn
+        ? `Turno de palabra: ${currentTurn}${turnQueue.length ? ` · En espera: ${turnQueue.join(', ')}` : ''}`
+        : turnQueue.length ? `Piden la palabra: ${turnQueue.join(', ')}` : 'Turno de palabra: libre';
+      renderTiles();
+    }
+
+    function syncToggles() {
+      const st = loadAccessibilityState();
+      $('subtitle-bar').classList.toggle('off', !st.subtitlesDefault);
+      $('transcript-panel').classList.toggle('off', !st.showTranscript);
+      const pressed: Record<string, boolean> = { subtitles: st.subtitlesDefault, transcript: st.showTranscript, interpreter: st.pinInterpreter, mic: micOn, camera: camOn };
+      document.querySelectorAll<HTMLButtonElement>('[data-room-action]').forEach((b) => {
+        const a = b.dataset.roomAction!;
+        if (a in pressed) b.setAttribute('aria-pressed', String(pressed[a]));
+      });
+      $('btn-reader').setAttribute('aria-pressed', String(readerOn));
+      renderParticipants();
+    }
+
+    let signTimer = 0;
+    function showSigns(t: Traduccion) {
+      window.clearTimeout(signTimer);
+      const glosas = t.oraciones.flatMap((o) => o.glosas);
+      $('sign-strip').innerHTML = glosas
+        .map((g, i) => `<li class="${g.tipo}" data-i="${i}">${g.pictograma && PICTO[g.pictograma] ? `${PICTO[g.pictograma]} ` : ''}${esc(g.glosa)}</li>`)
+        .join('');
+      const expr = t.oraciones.map((o) => o.expresionFacial).filter(Boolean);
+      $('sign-expression').textContent = expr.length ? `Expresión facial: ${expr.join(' ')}` : '';
+      $('sign-meta').textContent = `Cobertura léxica ${Math.round(t.cobertura * 100)} % · ${t.aviso}`;
+      if (loadAccessibilityState().reduceMotion || !glosas.length) {
+        $('sign-current').textContent = t.textoGlosado || '—';
+        return;
+      }
+      let i = 0;
+      const step = () => {
+        document.querySelectorAll('#sign-strip li').forEach((li) => li.classList.toggle('active', Number((li as HTMLElement).dataset.i) === i));
+        const g = glosas[i];
+        $('sign-current').textContent = `${g.pictograma && PICTO[g.pictograma] ? PICTO[g.pictograma] + ' ' : ''}${g.glosa}`;
+        i += 1;
+        if (i < glosas.length) signTimer = window.setTimeout(step, g.duracionMs);
+      };
+      step();
+    }
+
+    function speakSegments(segs: { texto: string; prioridad: string }[]) {
+      if (!readerOn || !('speechSynthesis' in window)) return;
+      segs.forEach((s) => {
+        const u = new SpeechSynthesisUtterance(s.texto);
+        u.lang = 'es-EC';
+        window.speechSynthesis.speak(u);
+      });
+    }
+
+    function onEvent(ev: RoomEvent) {
+      if (ev.tipo === 'transcripcion') {
+        $('subtitle-text').textContent = `${ev.hablante}: ${ev.texto}`;
+        const li = document.createElement('li');
+        li.innerHTML = `<strong>${esc(ev.hablante)}:</strong> ${esc(ev.texto)}`;
+        $('transcript-list').appendChild(li);
+        li.scrollIntoView({ block: 'nearest' });
+        if (ev.hablante === me.name) appendTranscript(apt!.id, ev.hablante, ev.texto); // solo el emisor guarda (RF-07)
+        showSigns(ev.senas);
+        const urgent = ev.lector.find((s) => s.prioridad === 'urgente');
+        if (urgent) {
+          announce(urgent.texto, 'assertive');
+          triggerVisualAlert(`Señal de alarma: ${ev.texto}`);
+        } else if (ev.hablante !== me.name) {
+          announce(`${ev.hablante} dice: ${ev.texto}`);
+        }
+        speakSegments(ev.lector);
+        document.querySelectorAll('.tile').forEach((t) => t.classList.remove('speaking'));
+        const speaker = participants.find((p) => p.name === ev.hablante);
+        if (speaker) document.querySelector(`[data-tile="${speaker.key}"]`)?.classList.add('speaking');
+      }
+      if (ev.tipo === 'turno') {
+        if (ev.accion === 'pedir' && !turnQueue.includes(ev.quien) && currentTurn !== ev.quien) turnQueue.push(ev.quien);
+        if (ev.accion === 'conceder') {
+          currentTurn = ev.quien;
+          const i = turnQueue.indexOf(ev.quien);
+          if (i >= 0) turnQueue.splice(i, 1);
+          if (ev.quien === me.name) triggerVisualAlert('Tienes el turno de palabra.');
+        }
+        if (ev.accion === 'ceder' && currentTurn === ev.quien) currentTurn = '';
+        announce(ev.accion === 'pedir' ? `${ev.quien} pide la palabra.` : ev.accion === 'conceder' ? `Turno de palabra para ${ev.quien}.` : `${ev.quien} cedió la palabra.`);
+        renderTurn();
+        renderProfessionalTurnControls();
+      }
+      if (ev.tipo === 'presencia') {
+        const p = participants.find((x) => x.key === ev.rol);
+        if (p && p.key !== role) {
+          p.status = ev.estado === 'conectado' ? 'conectado' : 'esperando';
+          p.name = ev.nombre || p.name;
+          announce(`${p.name} ${p.status === 'conectado' ? 'se conectó' : 'salió'}.`);
+          renderTiles();
+          renderParticipants();
+        }
+      }
+      if (ev.tipo === 'error') announce(ev.mensaje, 'assertive');
+    }
+
+    // El profesional concede la palabra a quien la pide (RF-22)
+    function renderProfessionalTurnControls() {
+      if (role !== 'profesional') return;
+      let box = document.getElementById('turn-controls');
+      if (!box) {
+        box = document.createElement('div');
+        box.id = 'turn-controls';
+        box.className = 'flex-wrap mt-1';
+        $('turn-indicator').after(box);
+      }
+      box.innerHTML = '';
+      turnQueue.forEach((name) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn btn-success';
+        b.textContent = `Dar la palabra a ${name}`;
+        b.addEventListener('click', () => connection?.send({ tipo: 'turno', quien: name, accion: 'conceder' }));
+        box!.appendChild(b);
+      });
+    }
+
+    function say(text: string) {
+      const clean = text.trim();
+      if (!clean || !connection) return;
+      connection.send({ tipo: 'transcripcion', hablante: me.name, texto: clean });
+    }
+
+    function runAction(action: string) {
+      const st = loadAccessibilityState();
+      switch (action) {
+        case 'subtitles': applyAccessibilityState({ ...st, subtitlesDefault: !st.subtitlesDefault }); announce(`Subtítulos ${!st.subtitlesDefault ? 'activados' : 'desactivados'}.`); break;
+        case 'transcript': applyAccessibilityState({ ...st, showTranscript: !st.showTranscript }); announce(`Transcripción ${!st.showTranscript ? 'visible' : 'oculta'}.`); break;
+        case 'interpreter': applyAccessibilityState({ ...st, pinInterpreter: !st.pinInterpreter }); announce(`Ventana del intérprete ${!st.pinInterpreter ? 'fijada y ampliada' : 'normal'}.`); break;
+        case 'mic': micOn = !micOn; stream?.getAudioTracks().forEach((t) => (t.enabled = micOn)); announce(`Micrófono ${micOn ? 'activado' : 'silenciado'}.`); break;
+        case 'camera': camOn = !camOn; stream?.getVideoTracks().forEach((t) => (t.enabled = camOn)); renderTiles(); announce(`Cámara ${camOn ? 'encendida' : 'apagada'}.`); break;
+        case 'raiseHand': connection?.send({ tipo: 'turno', quien: me.name, accion: currentTurn === me.name ? 'ceder' : 'pedir' }); break;
+      }
+      syncToggles();
+    }
+
+    async function enterRoom() {
+      $('precheck').hidden = true;
+      $('room').hidden = false;
+      $('room-title').textContent = `Videoconsulta · ${apt!.specialty} · ${apt!.time}`;
+      $('room-title').setAttribute('tabindex', '-1');
+      $('room-title').focus();
+      renderTiles();
+      syncToggles();
+      // Transcripción previa guardada de esta cita
+      (transcripts.get(apt!.id)?.lines ?? []).forEach((l) => {
+        const li = document.createElement('li');
+        li.innerHTML = `<strong>${esc(l.speaker)}:</strong> ${esc(l.text)}`;
+        $('transcript-list').appendChild(li);
+      });
+      connection = await connectRoom(apt!.id, onEvent);
+      const badge = $('room-mode-badge');
+      badge.textContent = connection.mode === 'agente' ? '🦀 Agente Rust en tiempo real' : '💻 Modo local (agente apagado)';
+      badge.className = `badge ${connection.mode === 'agente' ? 'badge-success' : 'badge-warning'}`;
+      connection.send({ tipo: 'presencia', rol: role, nombre: me.name, estado: 'conectado', apoyos: me.supports });
+      announce(`Entraste a la videoconsulta. ${connection.mode === 'agente' ? 'Subtítulos y señas en tiempo real activos.' : 'Modo local activo.'}`);
+      window.dispatchEvent(new CustomEvent('ssb:room-ready', { detail: { appointmentId: apt!.id, say } }));
+    }
+
+    window.addEventListener('ssb:shortcut', (e) => {
+      if (!$('room').hidden) runAction((e as CustomEvent<{ action: string }>).detail.action);
+    });
+    window.addEventListener('ssb:a11y-changed', syncToggles);
+    window.addEventListener('ssb:room-say', (e) => say((e as CustomEvent<string>).detail));
+    window.addEventListener('pagehide', () => {
+      connection?.send({ tipo: 'presencia', rol: role, nombre: me.name, estado: 'salio' });
+      stream?.getTracks().forEach((t) => t.stop());
+    });
+
+    document.querySelectorAll<HTMLButtonElement>('[data-room-action]').forEach((b) => b.addEventListener('click', () => runAction(b.dataset.roomAction!)));
+    $('btn-reader').addEventListener('click', () => { readerOn = !readerOn; syncToggles(); if (readerOn) speakText('Lectura en voz alta activada.'); });
+    $('btn-weak-network').addEventListener('click', () => {
+      weak = !weak;
+      $('btn-weak-network').setAttribute('aria-pressed', String(weak));
+      renderTiles();
+      announce(weak ? 'Conexión débil: se prioriza el video del intérprete y los demás pasan a solo audio.' : 'Conexión normal.');
+    });
+    $('btn-simulate-others').addEventListener('click', () => {
+      participants.filter((p) => p.key !== role && !(p.key === 'interprete' && !interp)).forEach((p) => onEvent({ tipo: 'presencia', rol: p.key, nombre: p.name, estado: 'conectado', apoyos: p.supports }));
+    });
+
+    $('speak-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = $<HTMLInputElement>('speak-input');
+      say(input.value);
+      input.value = '';
+    });
+
+    // Dictado real con reconocimiento de voz del navegador (Chrome/Edge)
+    type SR = { lang: string; interimResults: boolean; continuous: boolean; start(): void; stop(): void; onresult: (e: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> ; resultIndex: number }) => void; onend: () => void };
+    const SRClass = (window as unknown as { SpeechRecognition?: new () => SR; webkitSpeechRecognition?: new () => SR }).SpeechRecognition
+      ?? (window as unknown as { webkitSpeechRecognition?: new () => SR }).webkitSpeechRecognition;
+    const dictBtn = $<HTMLButtonElement>('btn-dictate');
+    if (!SRClass) {
+      dictBtn.disabled = true;
+      $('dictate-hint').textContent = 'Tu navegador no permite dictado por voz; escribe la frase y pulsa Enviar.';
+    } else {
+      let rec: SR | null = null;
+      dictBtn.addEventListener('click', () => {
+        if (rec) { rec.stop(); return; }
+        rec = new SRClass();
+        rec.lang = 'es-EC';
+        rec.continuous = true;
+        rec.interimResults = false;
+        rec.onresult = (ev) => {
+          for (let i = ev.resultIndex; i < ev.results.length; i++) if (ev.results[i].isFinal) say(ev.results[i][0].transcript);
+        };
+        rec.onend = () => { rec = null; dictBtn.setAttribute('aria-pressed', 'false'); dictBtn.textContent = '🎙️ Dictar'; };
+        rec.start();
+        dictBtn.setAttribute('aria-pressed', 'true');
+        dictBtn.textContent = '⏹ Detener dictado';
+        announce('Dictado activo: lo que digas se envía como subtítulo.');
+      });
+    }
+
+    // Guion de ejemplo para la presentación (solo profesional)
+    document.getElementById('btn-demo-script')?.addEventListener('click', () => {
+      const lines = [
+        'Buenos días. ¿Cómo se siente hoy?',
+        '¿Cuándo empezó el dolor de garganta?',
+        'Tome una pastilla de paracetamol cada 8 horas por 3 días.',
+        'Beba mucha agua y descanse.',
+        'Si tiene dificultad para respirar, acuda a urgencias de inmediato.',
+        'Control en 7 días. ¿Entiende las indicaciones?',
+      ];
+      lines.forEach((l, i) => window.setTimeout(() => say(l), i * 4500));
+      announce('Reproduciendo guion de ejemplo.');
+    });
+  }
+
+  init();
+</script>

@@ -1,0 +1,106 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Mi panel" section="paciente" description="Panel del paciente: próxima cita, recordatorios, indicaciones y avisos.">
+  <section class="card mb-3">
+    <h1 id="greeting">Mi panel</h1>
+    <p class="form-hint" style="margin: 0;">Todo lo de tu atención en un solo lugar.</p>
+  </section>
+
+  <div class="dashboard-grid">
+    <section class="card" aria-labelledby="t-next">
+      <h2 id="t-next">📅 Mi próxima cita</h2>
+      <div id="next-apt" class="apt-list"></div>
+      <a href="/paciente/reservar" class="btn btn-secondary mt-2">Reservar otra cita</a>
+    </section>
+
+    <section class="card" aria-labelledby="t-rem">
+      <h2 id="t-rem">⏰ Medicamentos de hoy</h2>
+      <ul id="today-reminders" class="reminder-list"></ul>
+      <a href="/paciente/recordatorios" class="btn btn-secondary mt-1">Ver todos los recordatorios</a>
+    </section>
+
+    <section class="card" aria-labelledby="t-ind">
+      <h2 id="t-ind">💊 Mis indicaciones</h2>
+      <div id="last-summary"></div>
+    </section>
+
+    <section class="card" id="inbox" aria-live="polite"></section>
+
+    <section class="card" aria-labelledby="t-sup">
+      <h2 id="t-sup">♿ Mis apoyos activos</h2>
+      <ul id="my-supports"></ul>
+      <p class="form-hint">Puedes cambiarlos cuando quieras en el menú de accesibilidad (<kbd>Alt+Shift+A</kbd>).</p>
+    </section>
+  </div>
+</BaseLayout>
+
+<style>
+  .reminder-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; }
+</style>
+
+<script>
+  import { announce } from '../../lib/announce';
+  import { isActive, ofPatient } from '../../lib/data/appointments';
+  import { signedSummariesOf } from '../../lib/data/consultation';
+  import { formatDateTime, isoDate, onDataChange } from '../../lib/data/db';
+  import { registerDose, remindersOf } from '../../lib/data/treatment';
+  import { esc } from '../../lib/forms';
+  import { requireRole } from '../../lib/session';
+  import { getPatient } from '../../lib/store';
+  import { SUPPORTS } from '../../lib/supports';
+  import { appointmentCard, mountInbox } from '../../lib/ui';
+
+  const session = requireRole('paciente');
+  if (session) {
+    const patient = getPatient(session.userId);
+    document.getElementById('greeting')!.textContent = `Hola, ${session.name.split(' ')[0]}`;
+    const refreshInbox = mountInbox(document.getElementById('inbox')!, 'paciente', session.userId);
+
+    const render = () => {
+      const today = isoDate(0);
+      const next = ofPatient(session.userId).find((a) => isActive(a) && a.date >= today);
+      const canEnter = next && next.date === today && next.status === 'CONFIRMADA';
+      document.getElementById('next-apt')!.innerHTML = next
+        ? appointmentCard(
+            next,
+            'paciente',
+            `${canEnter ? `<a class="btn btn-primary" href="/paciente/sala?cita=${next.id}">🎥 Entrar a la videoconsulta</a>` : ''}
+             <a class="btn btn-secondary" href="/paciente/preguntas?cita=${next.id}">❓ Preparar mis preguntas</a>`
+          )
+        : '<p>No tienes citas próximas.</p>';
+
+      const todays = remindersOf(session.userId).filter((r) => r.dueAt.slice(0, 10) === today);
+      const list = document.getElementById('today-reminders')!;
+      list.innerHTML = todays.length
+        ? todays
+            .map(
+              (r) => `<li class="reminder ${r.status.toLowerCase()}">
+                <span><strong>${esc(new Date(r.dueAt).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' }))}</strong> · ${esc(r.title)}</span>
+                ${r.status === 'PENDIENTE' ? `<button type="button" class="btn btn-success" data-dose="${r.id}">✅ Ya la tomé</button>` : `<span class="badge ${r.status === 'TOMADA' ? 'badge-success' : 'badge-danger'}">${r.status === 'TOMADA' ? 'Tomada' : 'Omitida'}</span>`}
+              </li>`
+            )
+            .join('')
+        : '<li class="form-hint">No tienes medicamentos para hoy.</li>';
+      list.querySelectorAll<HTMLButtonElement>('[data-dose]').forEach((b) =>
+        b.addEventListener('click', () => {
+          registerDose(b.dataset.dose!);
+          announce('Toma registrada. ¡Bien hecho!');
+        })
+      );
+
+      const s = signedSummariesOf(session.userId)[0];
+      document.getElementById('last-summary')!.innerHTML = s
+        ? `<p><strong>${esc(s.data.easyReadSummary)}</strong></p>
+           <p class="form-hint">Firmado por ${esc(s.signedBy ?? '')} · ${esc(formatDateTime(s.signedAt ?? ''))}</p>
+           <a class="btn btn-primary" href="/paciente/indicaciones">Ver indicaciones completas</a>`
+        : '<p class="form-hint">Cuando tu médico firme un resumen, aparecerá aquí.</p>';
+
+      document.getElementById('my-supports')!.innerHTML = (patient?.supports ?? []).map((k) => `<li>${esc(SUPPORTS[k].label)}</li>`).join('') || '<li>Ninguno</li>';
+      refreshInbox();
+    };
+    render();
+    onDataChange(render);
+  }
+</script>

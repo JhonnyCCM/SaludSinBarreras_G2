@@ -1,0 +1,120 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Mis indicaciones" section="paciente" description="Resumen de indicaciones firmado por el profesional en texto claro, audio y pictogramas (RF-05).">
+  <section class="card mb-3">
+    <span class="badge badge-info mb-1">T5-U1 · RF-05</span>
+    <h1>Mis indicaciones</h1>
+    <p class="form-hint" style="margin: 0;">Solo ves resúmenes revisados y firmados por tu médico. No son un diagnóstico automático.</p>
+  </section>
+  <div id="summaries"></div>
+</BaseLayout>
+
+<style is:global>
+  .med-grid { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); }
+  .med-card { display: flex; gap: 0.85rem; align-items: flex-start; padding: 0.9rem; border-radius: var(--radius); border: 2px solid var(--border-subtle); background: var(--bg); }
+  .med-picto { display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 12px; background: var(--surface); color: var(--primary); border: 2px solid var(--primary); flex-shrink: 0; }
+  .med-picto svg { width: 34px; height: 34px; }
+  .summary-block + .summary-block { margin-top: 1.5rem; }
+</style>
+
+<script>
+  import { speakText, stopSpeaking } from '../../lib/accessibility';
+  import { announce } from '../../lib/announce';
+  import { agentBaseUrl } from '../../lib/ai-harness/providers';
+  import { signedSummariesOf } from '../../lib/data/consultation';
+  import { formatDateTime, onDataChange } from '../../lib/data/db';
+  import { esc } from '../../lib/forms';
+  import { getMedicationPictogramSvg } from '../../lib/pictograms';
+  import { requireRole } from '../../lib/session';
+
+  /** Lectura en voz alta con el lector del agente Rust (expande mg, c/8h…); si no responde, lee el texto tal cual. */
+  async function readAloud(text: string) {
+    stopSpeaking();
+    try {
+      const res = await fetch(`${agentBaseUrl()}/v1/lector`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto: text }),
+        signal: AbortSignal.timeout(1500),
+      });
+      const json = (await res.json()) as { segmentos?: Array<{ texto: string }> };
+      if (json.segmentos?.length) {
+        json.segmentos.forEach((s) => {
+          const u = new SpeechSynthesisUtterance(s.texto);
+          u.lang = 'es-EC';
+          window.speechSynthesis.speak(u);
+        });
+        return;
+      }
+    } catch {
+      /* agente apagado: lectura directa */
+    }
+    speakText(text);
+  }
+
+  const session = requireRole('paciente');
+  if (session) {
+    const box = document.getElementById('summaries')!;
+    const render = () => {
+      const list = signedSummariesOf(session.userId);
+      if (!list.length) {
+        box.innerHTML = '<p class="card">Todavía no tienes indicaciones firmadas. Aparecerán aquí después de tu consulta.</p>';
+        return;
+      }
+      box.innerHTML = list
+        .map(
+          (s, i) => `<article class="card summary-block" aria-labelledby="sum-${i}">
+            <div class="flex-wrap" style="justify-content: space-between;">
+              <h2 id="sum-${i}" style="margin: 0;">Consulta del ${esc(formatDateTime(s.signedAt ?? ''))}</h2>
+              <span class="badge badge-success">✍️ Firmado por ${esc(s.signedBy ?? '')}</span>
+            </div>
+            <p class="mt-1" style="font-size: 1.1rem;"><strong>${esc(s.data.easyReadSummary)}</strong></p>
+            <div class="flex-wrap mb-2">
+              <button type="button" class="btn btn-accent" data-read="${i}">🔊 Escuchar indicaciones</button>
+              <button type="button" class="btn btn-secondary" data-stop>⏹ Detener</button>
+            </div>
+            <h3>Medicamentos</h3>
+            <div class="med-grid">
+              ${s.data.medications
+                .map(
+                  (m) => `<div class="med-card">
+                    <span class="med-picto" aria-hidden="true">${getMedicationPictogramSvg(m.pictogram)}</span>
+                    <div>
+                      <strong>${esc(m.name)}</strong> <span class="badge badge-info">${esc(m.dosage)}</span>
+                      <p style="margin: 0.3rem 0;">${esc(m.plainInstruction)}</p>
+                      <span class="form-hint">⏰ ${esc(m.schedule)} · 📆 ${esc(m.duration)}</span>
+                    </div>
+                  </div>`
+                )
+                .join('') || '<p class="form-hint">Sin medicamentos.</p>'}
+            </div>
+            <div class="grid-2 mt-2">
+              <div><h3>Cuidados</h3><ul>${s.data.careSteps.map((c) => `<li>${esc(c)}</li>`).join('')}</ul></div>
+              <div class="alert-box danger"><h3 style="color: inherit;">⚠️ Acude a urgencias si:</h3><ul>${s.data.warningSigns.map((w) => `<li>${esc(w)}</li>`).join('')}</ul></div>
+            </div>
+            <p class="mt-2"><strong>Próximo paso:</strong> ${esc(s.data.nextFollowUp)}</p>
+          </article>`
+        )
+        .join('');
+      box.querySelectorAll<HTMLButtonElement>('[data-read]').forEach((b) =>
+        b.addEventListener('click', () => {
+          const s = list[Number(b.dataset.read)];
+          const text = [
+            s.data.easyReadSummary,
+            ...s.data.medications.map((m, i) => `Medicamento ${i + 1}: ${m.name}. ${m.plainInstruction}`),
+            `Cuidados: ${s.data.careSteps.join('. ')}`,
+            `Acuda a urgencias si: ${s.data.warningSigns.join('. ')}`,
+            `Próximo paso: ${s.data.nextFollowUp}`,
+          ].join('. ');
+          readAloud(text);
+          announce('Leyendo tus indicaciones.');
+        })
+      );
+      box.querySelectorAll('[data-stop]').forEach((b) => b.addEventListener('click', stopSpeaking));
+    };
+    render();
+    onDataChange(render);
+  }
+</script>

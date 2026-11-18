@@ -1,0 +1,161 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Receta electrónica" section="profesional" description="Receta electrónica que genera los recordatorios de toma del paciente (RF-15, FORM-07).">
+  <section class="card mb-3">
+    <span class="badge badge-info mb-1">T8-U2 · RF-15 · FORM-07</span>
+    <h1>Receta electrónica</h1>
+    <p class="form-hint" style="margin: 0;">Al emitirla se crean los recordatorios del paciente por el canal que eligió.</p>
+  </section>
+
+  <div id="rx-errors" class="error-summary" tabindex="-1" hidden></div>
+
+  <form id="rx-form" class="card" novalidate>
+    <div class="form-group">
+      <label class="form-label" for="rx-apt">Consulta *</label>
+      <select id="rx-apt" class="form-control"></select>
+      <span class="form-hint" id="rx-channels"></span>
+    </div>
+    <div id="rx-items"></div>
+    <button type="button" class="btn btn-secondary" id="rx-add">➕ Agregar medicamento</button>
+    <div class="mt-2"><button type="submit" class="btn btn-primary">Revisar y emitir receta</button></div>
+  </form>
+
+  <section id="rx-done" class="card mt-3" hidden>
+    <div class="alert-box success" role="status" tabindex="-1" id="rx-done-msg"></div>
+    <a class="btn btn-secondary mt-2" id="rx-next" href="/profesional/historia">📁 Registrar en historia clínica</a>
+  </section>
+</BaseLayout>
+
+<style is:global>
+  .rx-item { border: 2px solid var(--border-subtle); border-radius: var(--radius); padding: 0.75rem; margin-bottom: 0.75rem; }
+  .rx-item legend { font-weight: 800; padding-inline: 0.3rem; }
+  .rx-grid { display: grid; gap: 0.5rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); }
+  #rx-done[hidden] { display: none; }
+</style>
+
+<script>
+  import { announce } from '../../lib/announce';
+  import { appointments, ofProfessional } from '../../lib/data/appointments';
+  import { summaries } from '../../lib/data/consultation';
+  import { formatDate, uid } from '../../lib/data/db';
+  import { issuePrescription, type PrescriptionItem } from '../../lib/data/treatment';
+  import { esc, validateForm, valueOf, type FieldRule } from '../../lib/forms';
+  import { confirmReview } from '../../lib/review';
+  import { requireRole } from '../../lib/session';
+  import { getPatient } from '../../lib/store';
+
+  const session = requireRole('profesional');
+  if (session) {
+    const form = document.getElementById('rx-form') as HTMLFormElement;
+    const aptSel = document.getElementById('rx-apt') as HTMLSelectElement;
+    const box = document.getElementById('rx-items')!;
+    const candidates = ofProfessional(session.userId).filter((a) => a.status === 'ATENDIDA' || a.status === 'EN_CURSO').reverse();
+    aptSel.innerHTML = candidates.map((a) => `<option value="${a.id}">${esc(formatDate(a.date))} · ${esc(getPatient(a.patientId)?.fullName ?? '')}</option>`).join('') || '<option value="">No hay consultas atendidas</option>';
+    const preset = new URLSearchParams(location.search).get('cita');
+    if (preset && candidates.some((a) => a.id === preset)) aptSel.value = preset;
+
+    let rows: string[] = [];
+    const hours = [4, 6, 8, 12, 24];
+
+    function addRow(prefill?: Partial<PrescriptionItem>) {
+      const id = uid('rxi');
+      rows.push(id);
+      const fs = document.createElement('fieldset');
+      fs.className = 'rx-item';
+      fs.dataset.row = id;
+      fs.innerHTML = `<legend>Medicamento ${rows.length}</legend>
+        <div class="rx-grid">
+          <div class="form-group"><label class="form-label" for="${id}-med">Medicamento *</label><input class="form-control" id="${id}-med" value="${esc(prefill?.medicine ?? '')}" /></div>
+          <div class="form-group"><label class="form-label" for="${id}-dose">Dosis *</label><input class="form-control" id="${id}-dose" placeholder="500 mg, 1 tableta" value="${esc(prefill?.dose ?? '')}" /></div>
+          <div class="form-group"><label class="form-label" for="${id}-every">Cada *</label><select class="form-control" id="${id}-every">${hours.map((h) => `<option value="${h}" ${h === (prefill?.everyHours ?? 8) ? 'selected' : ''}>${h} horas</option>`).join('')}</select></div>
+          <div class="form-group"><label class="form-label" for="${id}-days">Durante (días) *</label><input class="form-control" id="${id}-days" type="number" min="1" max="180" value="${prefill?.days ?? 5}" /></div>
+          <div class="form-group"><label class="form-label" for="${id}-first">Primera toma *</label><input class="form-control" id="${id}-first" type="time" value="${prefill?.firstTime ?? '08:00'}" /></div>
+        </div>
+        <button type="button" class="btn btn-secondary" data-remove="${id}">Quitar este medicamento</button>`;
+      box.appendChild(fs);
+      fs.querySelector<HTMLButtonElement>('[data-remove]')!.addEventListener('click', () => {
+        rows = rows.filter((r) => r !== id);
+        fs.remove();
+        renumber();
+        announce('Medicamento quitado.');
+      });
+    }
+    const renumber = () => box.querySelectorAll('legend').forEach((l, i) => (l.textContent = `Medicamento ${i + 1}`));
+
+    function prefillFromSummary() {
+      box.innerHTML = '';
+      rows = [];
+      const s = summaries.get(aptSel.value);
+      const meds = s?.status === 'FIRMADO' ? s.data.medications : [];
+      if (meds.length) {
+        meds.forEach((m) => {
+          const every = Number(/cada\s+(\d+)/i.exec(m.schedule)?.[1] ?? 8);
+          const days = Number(/(\d+)\s*d[ií]as/i.exec(m.duration)?.[1] ?? 5);
+          addRow({ medicine: m.name, dose: m.dosage, everyHours: hours.includes(every) ? every : 8, days });
+        });
+      } else addRow();
+      const p = aptSel.value ? getPatient(appointments.get(aptSel.value)!.patientId) : undefined;
+      const prefs = p?.preferences;
+      document.getElementById('rx-channels')!.textContent = p
+        ? `Recordatorios para ${p.fullName} por: ${[prefs?.remindersVisual && 'pantalla', prefs?.remindersVibration && 'vibración', prefs?.remindersAudio && 'sonido'].filter(Boolean).join(', ') || 'sin canales'}.`
+        : '';
+    }
+    aptSel.addEventListener('change', prefillFromSummary);
+    document.getElementById('rx-add')!.addEventListener('click', () => {
+      addRow();
+      document.getElementById(`${rows[rows.length - 1]}-med`)?.focus();
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fieldRules: FieldRule[] = [{ id: 'rx-apt', label: 'Consulta', check: (v) => (v ? null : 'No hay una consulta atendida.') }];
+      const seen = new Map<string, number>();
+      rows.forEach((id, i) => {
+        const n = i + 1;
+        fieldRules.push(
+          {
+            id: `${id}-med`,
+            label: `Medicamento ${n}`,
+            check: (v) => {
+              if (!v.trim()) return 'Escribe el nombre del medicamento.';
+              const key = v.trim().toLowerCase();
+              if (seen.has(key)) return `Ya está en la receta como medicamento ${seen.get(key)}. Quita el duplicado.`;
+              seen.set(key, n);
+              return null;
+            },
+          },
+          { id: `${id}-dose`, label: `Dosis ${n}`, check: (v) => (/\d/.test(v) ? null : 'Escribe la dosis con su cantidad. Ejemplo: 500 mg.') },
+          { id: `${id}-days`, label: `Días ${n}`, check: (v) => (Number(v) >= 1 && Number(v) <= 180 ? null : 'Escribe entre 1 y 180 días.') }
+        );
+      });
+      if (!validateForm(form, fieldRules, document.getElementById('rx-errors'))) return;
+      const apt = appointments.get(aptSel.value)!;
+      const items: PrescriptionItem[] = rows.map((id) => ({
+        id,
+        medicine: valueOf(`${id}-med`),
+        dose: valueOf(`${id}-dose`),
+        everyHours: Number(valueOf(`${id}-every`)),
+        days: Number(valueOf(`${id}-days`)),
+        firstTime: valueOf(`${id}-first`),
+      }));
+      const ok = await confirmReview({
+        title: '¿Emitir esta receta?',
+        items: [['Paciente', getPatient(apt.patientId)?.fullName ?? ''], ...items.map((it, i) => [`Medicamento ${i + 1}`, `${it.medicine} · ${it.dose} · cada ${it.everyHours} h · ${it.days} días · desde las ${it.firstTime}`] as [string, string])],
+        confirmLabel: 'Emitir receta',
+      });
+      if (!ok) return;
+      issuePrescription({ appointmentId: apt.id, patientId: apt.patientId, professionalId: session!.userId, items });
+      form.hidden = true;
+      const done = document.getElementById('rx-done')!;
+      done.hidden = false;
+      const msg = document.getElementById('rx-done-msg')!;
+      msg.innerHTML = `<strong>✅ Receta emitida.</strong> Se crearon los recordatorios de ${items.length} medicamento(s) para el paciente.`;
+      msg.focus();
+      (document.getElementById('rx-next') as HTMLAnchorElement).href = `/profesional/historia?cita=${apt.id}`;
+    });
+
+    prefillFromSummary();
+  }
+</script>

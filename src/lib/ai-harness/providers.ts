@@ -27,17 +27,39 @@ function readEnv(key: string): string {
   return '';
 }
 
+/** URL del agente Rust no conversacional (backend/agente-ia). */
+export function agentBaseUrl(): string {
+  return (readEnv('PUBLIC_AGENTE_URL') || 'http://127.0.0.1:8787').replace(/\/$/, '');
+}
+
+const TASK_PATHS: Record<AITaskType, string> = {
+  ANALYZE_ACCESSIBILITY_NEEDS: 'analizar-necesidades',
+  ORGANIZE_PATIENT_QUESTIONS: 'organizar-preguntas',
+  SUMMARIZE_MEDICAL_INDICATIONS: 'resumir-indicaciones',
+};
+
+/** Si el agente no responde, se evita reintentar durante 30 s para no demorar la interfaz. */
+let agentDownUntil = 0;
+
+/** Frases que el guardrail del agente Rust bloqueó en la última respuesta (los datos ya llegan saneados). */
+let lastAgentBlockedClaims: string[] = [];
+export function takeAgentBlockedClaims(): string[] {
+  const claims = lastAgentBlockedClaims;
+  lastAgentBlockedClaims = [];
+  return claims;
+}
+
 export function resolveRuntimeConfig(overrides?: AIHarnessConfig): Required<AIHarnessConfig> {
   const envProvider = readEnv('PUBLIC_AI_PROVIDER') as AIProviderName | '';
-  const provider: AIProviderName =
-    overrides?.provider || envProvider || 'local-deterministic-fallback';
+  // Por defecto se usa el agente Rust; si no está encendido, el harness cae al motor local.
+  const provider: AIProviderName = overrides?.provider || envProvider || 'rust-agente';
 
   return {
     provider,
     apiUrl: overrides?.apiUrl || readEnv('PUBLIC_AI_API_URL'),
     model: overrides?.model || readEnv('PUBLIC_AI_MODEL') || defaultModelFor(provider),
     apiKey: overrides?.apiKey || readEnv('PUBLIC_AI_API_KEY') || readEnv('AI_API_KEY'),
-    timeoutMs: overrides?.timeoutMs ?? 12000,
+    timeoutMs: overrides?.timeoutMs ?? (provider === 'rust-agente' ? 2500 : 12000),
     fallbackOnError: overrides?.fallbackOnError ?? true,
   };
 }
@@ -50,6 +72,8 @@ function defaultModelFor(provider: AIProviderName): string {
       return 'gpt-4o-mini';
     case 'ollama':
       return 'llama3.1';
+    case 'rust-agente':
+      return 'agente-rust-determinista-v1';
     default:
       return 'deterministic-v1';
   }
@@ -97,7 +121,7 @@ function runDeterministicAccessibility(
     supports.add('Subtítulos automáticos en tiempo real activos al entrar a sala (RF-03).');
   }
   if (needsLsec) {
-    supports.add('Intérprete de Lengua de Señas Ecuatoriana (LSEc) en ventana fija y prioritaria (RF-04).');
+    supports.add('Intérprete de Lengua de Señas Ecuatoriana (LSEc) en ventana fija y prioritaria (F3 · WCAG 1.2.6).');
     checklist.add('Hablar de frente a la cámara, ritmo pausado y respetando turnos con el intérprete.');
     interpreterBriefing.push(
       `Paciente ${input.patientName} requiere interpretación LSEc continua.`,
@@ -138,7 +162,7 @@ function runDeterministicAccessibility(
     supports.add(`Recordatorios multimodales habilitados (${channels.join(' + ')}) (RF-06).`);
   }
 
-  checklist.add('Verificar que el borrador de indicaciones IA sea revisado y firmado antes de enviarlo (RF-10).');
+  checklist.add('Verificar que el borrador de indicaciones IA sea revisado y firmado antes de enviarlo (RF-14).');
 
   const extraMinutes = needsLsec ? 15 : hasCognitiva || hasHabla ? 10 : 0;
   const bandwidthRecommendation =
@@ -148,7 +172,7 @@ function runDeterministicAccessibility(
         ? 'Conectividad media: habilitar video estándar adaptativo y respaldo de subtítulos sincrónicos.'
         : 'Conectividad alta: calidad HD habilitada para video de consulta e intérprete LSEc.';
 
-  const contrast: 'standard' | 'high' | 'grayscale' = input.communicationPreferences.highContrast
+  const contrast: 'standard' | 'high' = input.communicationPreferences.highContrast
     ? 'high'
     : 'standard';
 
@@ -245,7 +269,10 @@ function runDeterministicQuestions(
 function runDeterministicSummary(
   input: SummarizeMedicalIndicationsInput
 ): SummarizeMedicalIndicationsOutput {
-  const combinedSource = `${input.clinicalNotes}\n${input.transcriptText}`.trim();
+  // Igual que el agente Rust: las notas mandan; la transcripción solo si no hay notas y sin "[hora] Hablante:".
+  const combinedSource = (
+    input.clinicalNotes.trim() ? input.clinicalNotes : input.transcriptText.replace(/^\s*(\[[^\]]*\]\s*)?[^:\n]{2,60}:\s*/gm, '')
+  ).trim();
   const lines = combinedSource
     .split(/[\n.;]+/)
     .map((l) => l.trim())
@@ -389,6 +416,25 @@ export async function callExternalNonConversationalProvider<K extends AITaskType
   });
 
   try {
+    if (config.provider === 'rust-agente') {
+      if (Date.now() < agentDownUntil) throw new Error('Agente Rust no disponible (reintento en unos segundos).');
+      try {
+        const res = await fetch(`${config.apiUrl || agentBaseUrl()}/v1/tareas/${TASK_PATHS[taskType]}`, {
+          method: 'POST',
+          signal: controller.signal,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+        });
+        const json = (await res.json()) as { data?: TaskOutputMap[K]; error?: string; guardrails?: { blockedDiagnosticClaims?: string[] } };
+        if (!res.ok || !json.data) throw new Error(json.error || `Agente Rust HTTP ${res.status}`);
+        lastAgentBlockedClaims = json.guardrails?.blockedDiagnosticClaims ?? [];
+        return json.data;
+      } catch (err) {
+        if (!(err instanceof Error && err.message.startsWith('Agente Rust HTTP'))) agentDownUntil = Date.now() + 30_000;
+        throw err;
+      }
+    }
+
     if (config.provider === 'gemini') {
       if (!config.apiKey) {
         throw new Error('Falta API key para proveedor Gemini.');

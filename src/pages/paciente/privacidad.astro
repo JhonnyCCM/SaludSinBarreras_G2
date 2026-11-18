@@ -1,0 +1,164 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Privacidad y transcripciones" section="paciente" description="Descarga de transcripciones accesibles y permisos sobre los datos clínicos (RF-07).">
+  <section class="card mb-3">
+    <span class="badge badge-info mb-1">T7-U1 · RF-07</span>
+    <h1>Mis transcripciones y mi privacidad</h1>
+    <p class="form-hint" style="margin: 0;">Tú decides quién puede ver tus datos clínicos.</p>
+  </section>
+
+  <div class="dashboard-grid">
+    <section class="card" aria-labelledby="t-tr">
+      <h2 id="t-tr">📝 Transcripciones de mis consultas</h2>
+      <ul id="tr-list" class="plain-list"></ul>
+    </section>
+
+    <section class="card" aria-labelledby="t-perm">
+      <h2 id="t-perm">🔒 ¿Quién puede ver mis datos?</h2>
+      <ul id="grant-list" class="plain-list"></ul>
+      <div id="grant-errors" class="error-summary mt-2" tabindex="-1" hidden></div>
+      <form id="grant-form" class="mt-2" novalidate>
+        <h3>Dar permiso a otra persona</h3>
+        <div class="form-group">
+          <label class="form-label" for="g-name">Nombre de la persona *</label>
+          <input id="g-name" class="form-control" autocomplete="off" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="g-relation">Relación *</label>
+          <input id="g-relation" class="form-control" placeholder="Ejemplo: hija, cuidador" />
+        </div>
+        <fieldset class="plain-group">
+          <legend class="form-label">¿Qué puede ver? *</legend>
+          <label class="radio-chip"><input type="radio" name="g-scope" id="g-scope-resumen" value="resumen" checked /> Solo mis indicaciones</label>
+          <label class="radio-chip"><input type="radio" name="g-scope" id="g-scope-historia" value="historia" /> Indicaciones e historia clínica</label>
+        </fieldset>
+        <button type="submit" class="btn btn-primary mt-2">Revisar y dar permiso</button>
+      </form>
+    </section>
+
+    <section class="card" aria-labelledby="t-log">
+      <h2 id="t-log">👁️ Quién consultó mis datos</h2>
+      <ul id="log-list" class="plain-list"></ul>
+    </section>
+  </div>
+</BaseLayout>
+
+<style is:global>
+  .plain-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; }
+  .plain-list > li { padding: 0.6rem 0.8rem; border: 1px solid var(--border-subtle); border-radius: var(--radius); background: var(--bg); }
+  .plain-group { border: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .plain-group legend { width: 100%; margin-bottom: 0.4rem; }
+</style>
+
+<script>
+  import { announce } from '../../lib/announce';
+  import { appointments } from '../../lib/data/appointments';
+  import { transcriptText, transcripts } from '../../lib/data/consultation';
+  import { formatDate, formatDateTime, onDataChange } from '../../lib/data/db';
+  import { professionals } from '../../lib/data/professionals';
+  import { addGrant, grantsOf, logAccess, logsOf, toggleGrant } from '../../lib/data/records';
+  import { esc, rules, validateForm, valueOf } from '../../lib/forms';
+  import { confirmReview } from '../../lib/review';
+  import { requireRole } from '../../lib/session';
+
+  const session = requireRole('paciente');
+  if (session) {
+    const header = (aptId: string) => {
+      const a = appointments.get(aptId)!;
+      return { a, prof: professionals.get(a.professionalId)?.name ?? '' };
+    };
+
+    function download(aptId: string, kind: 'txt' | 'pdf') {
+      const { a, prof } = header(aptId);
+      const body = transcriptText(aptId);
+      logAccess(session!.userId, session!.name, `Descargó la transcripción del ${a.date} en ${kind.toUpperCase()}`);
+      if (kind === 'txt') {
+        const txt = `TRANSCRIPCIÓN DE CONSULTA — SaludSinBarreras\nFecha: ${a.date} ${a.time}\nPaciente: ${session!.name}\nProfesional: ${prof}\nEspecialidad: ${a.specialty}\n\n${body}\n`;
+        const url = URL.createObjectURL(new Blob([txt], { type: 'text/plain;charset=utf-8' }));
+        const link = Object.assign(document.createElement('a'), { href: url, download: `transcripcion-${a.date}.txt` });
+        link.click();
+        URL.revokeObjectURL(url);
+      } else {
+        // PDF accesible: documento HTML semántico (idioma, título, encabezados, lista) que el navegador guarda como PDF.
+        const lines = (transcripts.get(aptId)?.lines ?? []).map((l) => `<li><strong>${esc(l.speaker)}:</strong> ${esc(l.text)}</li>`).join('');
+        const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Transcripción ${esc(a.date)}</title>
+          <style>body{font:16px/1.6 Verdana,Arial,sans-serif;margin:2rem;color:#111}h1{font-size:1.4rem}li{margin-bottom:.4rem}</style></head>
+          <body><h1>Transcripción de consulta</h1><p>${esc(formatDate(a.date))} a las ${esc(a.time)} · ${esc(a.specialty)}<br>Paciente: ${esc(session!.name)} · Profesional: ${esc(prof)}</p>
+          <h2>Conversación</h2><ol>${lines}</ol><script>window.addEventListener('load',()=>print())<\/script></body></html>`;
+        const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+        if (!window.open(url, '_blank')) return announce('Permite las ventanas emergentes para generar el PDF.', 'assertive');
+        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      }
+      announce('Descarga lista.');
+    }
+
+    function render() {
+      const mine = transcripts.all().filter((t) => appointments.get(t.id)?.patientId === session!.userId);
+      document.getElementById('tr-list')!.innerHTML =
+        mine
+          .map((t) => {
+            const { a, prof } = header(t.id);
+            return `<li><strong>${esc(formatDate(a.date))}</strong> · ${esc(prof)}<br>
+              <span class="form-hint">${t.lines.length} intervenciones</span>
+              <div class="flex-wrap mt-1">
+                <button type="button" class="btn btn-secondary" data-dl="${t.id}" data-kind="txt">⬇️ Descargar .txt</button>
+                <button type="button" class="btn btn-secondary" data-dl="${t.id}" data-kind="pdf">⬇️ Guardar como PDF</button>
+              </div></li>`;
+          })
+          .join('') || '<li class="form-hint">Aún no tienes consultas con transcripción.</li>';
+      document.querySelectorAll<HTMLButtonElement>('[data-dl]').forEach((b) => b.addEventListener('click', () => download(b.dataset.dl!, b.dataset.kind as 'txt' | 'pdf')));
+
+      document.getElementById('grant-list')!.innerHTML =
+        grantsOf(session!.userId)
+          .map(
+            (g) => `<li><label class="flex-wrap" style="justify-content: space-between;">
+              <span><strong>${esc(g.name)}</strong> (${esc(g.relation)}) · ${g.scope === 'historia' ? 'indicaciones e historia clínica' : 'solo indicaciones'}</span>
+              <span><input type="checkbox" data-grant="${g.id}" ${g.active ? 'checked' : ''} /> ${g.active ? 'Permiso activo' : 'Sin permiso'}</span>
+            </label></li>`
+          )
+          .join('') || '<li class="form-hint">Nadie más tiene permiso.</li>';
+      document.querySelectorAll<HTMLInputElement>('[data-grant]').forEach((c) =>
+        c.addEventListener('change', () => {
+          toggleGrant(c.dataset.grant!, c.checked);
+          announce(c.checked ? 'Permiso activado.' : 'Permiso retirado.');
+        })
+      );
+
+      document.getElementById('log-list')!.innerHTML =
+        logsOf(session!.userId)
+          .slice(0, 10)
+          .map((l) => `<li><strong>${esc(l.actor)}</strong>: ${esc(l.action)}<br><span class="form-hint">${esc(formatDateTime(l.at))}</span></li>`)
+          .join('') || '<li class="form-hint">Sin accesos registrados.</li>';
+    }
+
+    const form = document.getElementById('grant-form') as HTMLFormElement;
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const ok = validateForm(
+        form,
+        [
+          { id: 'g-name', label: 'Nombre', check: rules.minLength(3, 'Escribe el nombre de la persona.') },
+          { id: 'g-relation', label: 'Relación', check: rules.required('Indica la relación, por ejemplo: hija.') },
+        ],
+        document.getElementById('grant-errors')
+      );
+      if (!ok) return;
+      const scope = (form.querySelector<HTMLInputElement>('input[name="g-scope"]:checked')?.value ?? 'resumen') as 'resumen' | 'historia';
+      const confirmed = await confirmReview({
+        title: '¿Dar permiso para ver tus datos?',
+        items: [['Persona', valueOf('g-name')], ['Relación', valueOf('g-relation')], ['Podrá ver', scope === 'historia' ? 'Indicaciones e historia clínica' : 'Solo indicaciones']],
+        confirmLabel: 'Sí, dar permiso',
+        warning: 'Puedes retirar este permiso cuando quieras.',
+      });
+      if (!confirmed) return;
+      addGrant(session!.userId, valueOf('g-name'), valueOf('g-relation'), scope);
+      form.reset();
+      announce('Permiso registrado.');
+    });
+
+    render();
+    onDataChange(render);
+  }
+</script>

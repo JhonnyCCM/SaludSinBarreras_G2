@@ -1,0 +1,137 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Seguimiento" section="profesional" description="Cumplimiento del tratamiento y cita de control (RF-17).">
+  <section class="card mb-3">
+    <span class="badge badge-info mb-1">T10-U2 · RF-17</span>
+    <h1>Seguimiento del tratamiento</h1>
+    <label class="form-label" for="fu-patient">Paciente</label>
+    <select id="fu-patient" class="form-control"></select>
+  </section>
+
+  <div class="dashboard-grid">
+    <section class="card" aria-labelledby="t-adh">
+      <h2 id="t-adh">Cumplimiento</h2>
+      <div id="fu-stats" class="stats-row"></div>
+      <div id="fu-alert" class="mt-2"></div>
+      <div class="table-scroll mt-2">
+        <table class="data-table">
+          <caption>Últimas tomas programadas</caption>
+          <thead><tr><th scope="col">Fecha y hora</th><th scope="col">Medicamento</th><th scope="col">Estado</th></tr></thead>
+          <tbody id="fu-table"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="t-ctrl">
+      <h2 id="t-ctrl">Agendar cita de control</h2>
+      <div id="fu-errors" class="error-summary" tabindex="-1" hidden></div>
+      <form id="fu-form" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="fu-date">Día *</label>
+          <select id="fu-date" class="form-control"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="fu-time">Hora *</label>
+          <select id="fu-time" class="form-control"></select>
+          <span class="form-hint" id="fu-duration"></span>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="fu-reason">Motivo del control *</label>
+          <input id="fu-reason" class="form-control" value="Control de evolución y adherencia al tratamiento" />
+        </div>
+        <button type="submit" class="btn btn-primary">Revisar y agendar</button>
+      </form>
+    </section>
+  </div>
+</BaseLayout>
+
+<style is:global>
+  .stats-row { display: grid; gap: 0.5rem; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+  .table-scroll { overflow-x: auto; max-height: 360px; overflow-y: auto; }
+</style>
+
+<script>
+  import { announce } from '../../lib/announce';
+  import { availableSlots, bookAppointment, bookableDates, confirmAppointment, ofProfessional } from '../../lib/data/appointments';
+  import { formatDate, onDataChange } from '../../lib/data/db';
+  import { professionals } from '../../lib/data/professionals';
+  import { adherenceOf, remindersOf } from '../../lib/data/treatment';
+  import { esc, rules, validateForm, valueOf } from '../../lib/forms';
+  import { confirmReview } from '../../lib/review';
+  import { requireRole } from '../../lib/session';
+  import { getPatient } from '../../lib/store';
+
+  const session = requireRole('profesional');
+  if (session) {
+    const prof = professionals.get(session.userId)!;
+    const pSel = document.getElementById('fu-patient') as HTMLSelectElement;
+    const ids = [...new Set(ofProfessional(prof.id).map((a) => a.patientId))];
+    pSel.innerHTML = ids.map((id) => `<option value="${id}">${esc(getPatient(id)?.fullName ?? id)}</option>`).join('');
+    if (ids.includes('pac-002')) pSel.value = 'pac-002';
+    const dSel = document.getElementById('fu-date') as HTMLSelectElement;
+    const tSel = document.getElementById('fu-time') as HTMLSelectElement;
+
+    function renderAdherence() {
+      const a = adherenceOf(pSel.value);
+      document.getElementById('fu-stats')!.innerHTML = `
+        <div class="stat"><strong>${a.percent} %</strong><span>cumplimiento</span></div>
+        <div class="stat"><strong>${a.taken}</strong><span>tomadas</span></div>
+        <div class="stat"><strong>${a.missed}</strong><span>omitidas</span></div>
+        <div class="stat"><strong>${a.pending}</strong><span>pendientes</span></div>`;
+      document.getElementById('fu-alert')!.innerHTML = a.missed
+        ? `<p class="alert-box warning">⚠️ ${a.missed} toma(s) omitida(s). Conviene revisarlas en el control.</p>`
+        : a.taken ? '<p class="alert-box success">Sin tomas omitidas.</p>' : '<p class="form-hint">El paciente no tiene recetas con recordatorios.</p>';
+      const list = remindersOf(pSel.value).filter((r) => r.status !== 'PENDIENTE').slice(-15).reverse();
+      document.getElementById('fu-table')!.innerHTML =
+        list
+          .map((r) => `<tr><td>${esc(new Date(r.dueAt).toLocaleString('es-EC', { dateStyle: 'short', timeStyle: 'short' }))}</td><td>${esc(r.title)}</td>
+            <td>${r.status === 'TOMADA' ? '✅ Tomada' : '❌ Omitida'}</td></tr>`)
+          .join('') || '<tr><td colspan="3">Sin tomas registradas todavía.</td></tr>';
+    }
+
+    function fillDates() {
+      const dates = bookableDates(prof.id).filter((d) => availableSlots(prof.id, d, 'control').length);
+      dSel.innerHTML = dates.map((d) => `<option value="${d}">${esc(formatDate(d))}</option>`).join('') || '<option value="">Publica más horario para agendar</option>';
+      fillTimes();
+    }
+    function fillTimes() {
+      const slots = dSel.value ? availableSlots(prof.id, dSel.value, 'control') : [];
+      tSel.innerHTML = slots.map((s) => `<option>${s}</option>`).join('') || '<option value="">Sin horas libres</option>';
+      document.getElementById('fu-duration')!.textContent = `Consulta de control de ${prof.durations.control} minutos dentro de tu horario publicado.`;
+    }
+    dSel.addEventListener('change', fillTimes);
+    pSel.addEventListener('change', renderAdherence);
+
+    const form = document.getElementById('fu-form') as HTMLFormElement;
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const ok = validateForm(
+        form,
+        [
+          { id: 'fu-date', label: 'Día', check: (v) => (v ? null : 'No tienes días con horario libre. Publica un bloque en Mi horario.') },
+          { id: 'fu-time', label: 'Hora', check: (v) => (v ? null : 'Elige una hora libre.') },
+          { id: 'fu-reason', label: 'Motivo', check: rules.required('Escribe el motivo del control.') },
+        ],
+        document.getElementById('fu-errors')
+      );
+      if (!ok) return;
+      const p = getPatient(pSel.value)!;
+      const confirmed = await confirmReview({
+        title: '¿Agendar la cita de control?',
+        items: [['Paciente', p.fullName], ['Día', formatDate(dSel.value)], ['Hora', tSel.value], ['Motivo', valueOf('fu-reason')]],
+        confirmLabel: 'Agendar y avisar al paciente',
+      });
+      if (!confirmed) return;
+      const apt = bookAppointment({ patientId: p.id, professionalId: prof.id, date: dSel.value, time: tSel.value, type: 'control', reason: valueOf('fu-reason') });
+      confirmAppointment(apt.id);
+      fillDates();
+      announce(`Control agendado para ${p.fullName} el ${formatDate(apt.date)} a las ${apt.time}.`);
+    });
+
+    renderAdherence();
+    fillDates();
+    onDataChange(renderAdherence);
+  }
+</script>

@@ -1,0 +1,90 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Recordatorios" section="paciente" description="Recordatorios multimodales de medicamentos y registro de la toma en un paso (RF-06).">
+  <section class="card mb-3">
+    <span class="badge badge-info mb-1">T6-U1 · RF-06</span>
+    <h1>Mis recordatorios</h1>
+    <p id="channels" class="form-hint"></p>
+    <button type="button" class="btn btn-secondary" id="test-reminder">🔔 Probar un recordatorio ahora</button>
+  </section>
+
+  <div class="dashboard-grid">
+    <section class="card" aria-labelledby="t-today"><h2 id="t-today">Hoy</h2><ul class="reminder-list" id="r-today"></ul></section>
+    <section class="card" aria-labelledby="t-next"><h2 id="t-next">Próximos días</h2><ul class="reminder-list" id="r-next"></ul></section>
+    <section class="card" aria-labelledby="t-past"><h2 id="t-past">Historial</h2><p id="r-stats" class="form-hint"></p><ul class="reminder-list" id="r-past"></ul></section>
+  </div>
+</BaseLayout>
+
+<style is:global>
+  .reminder-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; max-height: 420px; overflow-y: auto; }
+</style>
+
+<script>
+  import { speakText, triggerVisualAlert } from '../../lib/accessibility';
+  import { announce } from '../../lib/announce';
+  import { isoDate, onDataChange } from '../../lib/data/db';
+  import { adherenceOf, registerDose, remindersOf, type Reminder } from '../../lib/data/treatment';
+  import { esc } from '../../lib/forms';
+  import { requireRole } from '../../lib/session';
+  import { getPatient } from '../../lib/store';
+
+  const session = requireRole('paciente');
+  if (session) {
+    const patient = getPatient(session.userId)!;
+    const prefs = patient.preferences;
+    const channels = [prefs.remindersVisual && 'aviso en pantalla', prefs.remindersVibration && 'vibración', prefs.remindersAudio && 'sonido y voz'].filter(Boolean);
+    document.getElementById('channels')!.textContent = `Te avisamos por: ${channels.join(', ') || 'ningún canal (actívalos en tu perfil)'}.`;
+
+    const time = (r: Reminder) => new Date(r.dueAt).toLocaleString('es-EC', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+    const item = (r: Reminder) => `<li class="reminder ${r.status.toLowerCase()}">
+      <span><strong>${esc(time(r))}</strong> · ${esc(r.title)}</span>
+      ${r.status === 'PENDIENTE'
+        ? `<button type="button" class="btn btn-success" data-dose="${r.id}" aria-label="Registrar toma de ${esc(r.title)} de las ${esc(time(r))}">✅ Ya la tomé</button>`
+        : `<span class="badge ${r.status === 'TOMADA' ? 'badge-success' : 'badge-danger'}">${r.status === 'TOMADA' ? 'Tomada' : 'Omitida'}</span>`}
+    </li>`;
+
+    /** Aviso multimodal según los canales del paciente (F3 · 1.3.3). */
+    function alertReminder(r: Pick<Reminder, 'title'>) {
+      const msg = `Es hora de tu medicamento: ${r.title}.`;
+      triggerVisualAlert(msg, { vibrate: prefs.remindersVibration, speak: false });
+      if (prefs.remindersAudio) speakText(msg);
+      announce(msg, 'assertive');
+    }
+
+    const alerted = new Set<string>();
+    function render() {
+      const today = isoDate(0);
+      const all = remindersOf(session!.userId);
+      const now = Date.now();
+      const todayList = all.filter((r) => r.dueAt.slice(0, 10) === today || (r.status === 'PENDIENTE' && new Date(r.dueAt).getTime() < now));
+      const next = all.filter((r) => r.dueAt.slice(0, 10) > today).slice(0, 12);
+      const past = all.filter((r) => r.dueAt.slice(0, 10) < today && r.status !== 'PENDIENTE').reverse().slice(0, 20);
+      const fill = (id: string, list: Reminder[], empty: string) => {
+        document.getElementById(id)!.innerHTML = list.map(item).join('') || `<li class="form-hint">${empty}</li>`;
+      };
+      fill('r-today', todayList, 'Nada para hoy.');
+      fill('r-next', next, 'Sin recordatorios próximos.');
+      fill('r-past', past, 'Sin historial.');
+      const a = adherenceOf(session!.userId);
+      document.getElementById('r-stats')!.textContent = `Cumplimiento: ${a.percent} % (${a.taken} tomadas, ${a.missed} omitidas).`;
+      document.querySelectorAll<HTMLButtonElement>('[data-dose]').forEach((b) =>
+        b.addEventListener('click', () => {
+          registerDose(b.dataset.dose!);
+          announce('Toma registrada.');
+        })
+      );
+      // Avisar las tomas que vencen ahora (ventana de 1 minuto)
+      all.filter((r) => r.status === 'PENDIENTE' && Math.abs(new Date(r.dueAt).getTime() - now) < 60_000 && !alerted.has(r.id)).forEach((r) => {
+        alerted.add(r.id);
+        alertReminder(r);
+      });
+    }
+
+    document.getElementById('test-reminder')!.addEventListener('click', () => alertReminder({ title: 'Recordatorio de prueba' }));
+    render();
+    onDataChange(render);
+    window.setInterval(render, 30_000);
+  }
+</script>

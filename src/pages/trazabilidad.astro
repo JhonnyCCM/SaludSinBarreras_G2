@@ -1,0 +1,114 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const RF: Array<[string, string, string, string, string]> = [
+  ['RF-01', 'U1', 'T1-U1', 'Registro por discapacidad con apoyos que se habilitan', '/paciente/registro'],
+  ['RF-02', 'U1', 'T2-U1', 'Reservar cita en un horario publicado', '/paciente/reservar'],
+  ['RF-03', 'U1', 'T3-U1', 'Probar cámara, micrófono y conexión; activar apoyos al entrar', '/paciente/sala'],
+  ['RF-04', 'U1', 'T4-U1', 'Preguntas por texto, voz o señas y pedir la palabra', '/paciente/preguntas'],
+  ['RF-05', 'U1', 'T5-U1', 'Resumen firmado en texto claro, audio y pictogramas', '/paciente/indicaciones'],
+  ['RF-06', 'U1', 'T6-U1', 'Recordatorios por canales elegidos y registro de toma', '/paciente/recordatorios'],
+  ['RF-07', 'U1', 'T7-U1', 'Descargar transcripción y decidir quién ve los datos', '/paciente/privacidad'],
+  ['RF-08', 'U2', 'T1-U2', 'Horario por día y duración por tipo de consulta', '/profesional/horario'],
+  ['RF-09', 'U2', 'T2-U2', 'Agenda del día: confirmar, reprogramar o cancelar con aviso', '/profesional'],
+  ['RF-10', 'U2', 'T3-U2', 'Ficha con discapacidad, apoyos y motivo', '/profesional'],
+  ['RF-11', 'U2', 'T4-U2', 'Solicitar intérprete vigente y libre', '/profesional'],
+  ['RF-12', 'U2', 'T5-U2', 'Iniciar videoconsulta con panel de participantes y apoyos', '/profesional/consulta'],
+  ['RF-13', 'U2', 'T6-U2', 'Preguntas ordenadas por IA, respondidas y comprensión', '/profesional/consulta'],
+  ['RF-14', 'U2', 'T7-U2', 'Borrador IA corregido y firmado antes de enviarse', '/profesional/resumen'],
+  ['RF-15', 'U2', 'T8-U2', 'Receta electrónica que genera recordatorios', '/profesional/receta'],
+  ['RF-16', 'U2', 'T9-U2', 'Registro en historia clínica con fecha, hora y autor', '/profesional/historia'],
+  ['RF-17', 'U2', 'T10-U2', 'Cita de control e historial de tomas', '/profesional/seguimiento'],
+  ['RF-18', 'U3', 'T1-U3', 'Acreditación con vencimiento y disponibilidad', '/interprete/acreditacion'],
+  ['RF-19', 'U3', 'T2-U3', 'Aceptar o rechazar solicitudes', '/interprete'],
+  ['RF-20', 'U3', 'T3-U3', 'Contexto mínimo y glosario de la especialidad', '/interprete'],
+  ['RF-21', 'U3', 'T4-U3', 'Vista previa con guía de encuadre', '/interprete/sesion'],
+  ['RF-22', 'U3', 'T5-U3', 'Turno de palabra y prioridad del video del intérprete', '/interprete/sesion'],
+  ['RF-23', 'U3', 'T6-U3', 'Reporte de incidencias técnicas', '/interprete/sesion'],
+  ['RF-24', 'U3', 'T7-U3', 'Cierre con confidencialidad y duración', '/interprete/sesion'],
+];
+
+const F3: Array<[string, string, string]> = [
+  ['Visual', 'Tamaño de texto', '1.4.4 AA'],
+  ['Visual', 'Modo de contraste', '1.4.6 AAA'],
+  ['Visual / Cognitiva', 'Interlineado', '1.4.12 AA'],
+  ['Visual / Cognitiva', 'Espaciado de texto', '1.4.12 AA'],
+  ['Visual / Cognitiva', 'Fuente legible', '1.4.8 AAA'],
+  ['Visual / Cognitiva', 'Lectura en voz alta', '1.1.1 A'],
+  ['Auditiva', 'Subtítulos en vivo', '1.2.4 AA'],
+  ['Auditiva', 'Transcripción', '1.2.8 AAA'],
+  ['Auditiva', 'Ventana del intérprete', '1.2.6 AAA'],
+  ['Auditiva', 'Alertas visuales y vibración', '1.3.3 A'],
+  ['Motriz', 'Navegación por teclado con atajos Alt+Shift', '2.1.1 A · 2.1.4 A'],
+  ['Motriz', 'Foco reforzado', '2.4.7 AA · 2.4.11 AA · 2.4.13 AAA'],
+  ['Motriz', 'Botones grandes', '2.5.5 AAA'],
+  ['Cognitiva', 'Detener animaciones', '2.2.2 A · 2.3.3 AAA'],
+  ['Cognitiva', 'Lectura fácil', '3.1.5 AAA'],
+];
+
+const F4: Array<[string, string, string]> = [
+  ['Perceptible', '1.3.1 · 1.3.5', 'Etiquetas asociadas, grupos con legend y autocompletado (src/lib/forms.ts, registro)'],
+  ['Perceptible', '1.4.1 · 1.4.3 · 1.4.11', 'Errores con texto e ícono; contraste de textos 4.5:1 y bordes 3:1 (global.css)'],
+  ['Operable', '2.1.2 · 2.4.3', 'Diálogos nativos que se cierran con Esc; orden de foco igual al visual'],
+  ['Operable', '2.2.1 · 2.2.5', 'Aviso de sesión con "Ampliar tiempo" y borradores automáticos (SessionTimeout, autosave.ts)'],
+  ['Operable', '2.4.6 · 2.5.3 · 2.5.8', 'Títulos por formulario, botones con texto visible y objetivos de 24 px mínimo'],
+  ['Comprensible', '3.3.2 · 3.2.2 · 3.2.6', 'Formatos indicados; apoyos que aparecen sin mover el foco; ayuda fija arriba a la derecha'],
+  ['Comprensible', '3.3.1 · 3.3.3', 'Resumen de errores con enlaces y sugerencias de corrección (validateForm)'],
+  ['Comprensible', '3.3.4 · 3.3.7 · 3.3.8', 'Revisión antes de enviar (review.ts); apoyos del perfil reutilizados; login sin captcha'],
+  ['Robusto', '4.1.2 · 4.1.3', 'aria-invalid y aria-describedby; mensajes de estado en regiones vivas (announce.ts)'],
+];
+---
+
+<BaseLayout title="Trazabilidad F1–F4" description="Relación entre requisitos de los formatos F1 a F4 y las pantallas del prototipo.">
+  <section class="card mb-3">
+    <h1>Trazabilidad F1–F4</h1>
+    <p>Dónde se implementa cada requisito de los formatos del Grupo 5.</p>
+    <ul>
+      <li><a href="#rf">Requisitos funcionales (F1 y F2)</a></li>
+      <li><a href="#f3">Menú de accesibilidad (F3)</a></li>
+      <li><a href="#f4">Criterios de formularios (F4)</a></li>
+    </ul>
+  </section>
+
+  <section class="card mb-3" id="rf" aria-labelledby="t-rf">
+    <h2 id="t-rf">Requisitos funcionales (F2)</h2>
+    <div class="table-scroll">
+      <table class="data-table">
+        <caption class="sr-only">Requisitos funcionales y pantalla donde se implementan</caption>
+        <thead><tr><th scope="col">Código</th><th scope="col">Usuario</th><th scope="col">Tarea</th><th scope="col">Qué hace</th><th scope="col">Pantalla</th></tr></thead>
+        <tbody>
+          {RF.map(([c, u, t, d, href]) => (
+            <tr><th scope="row">{c}</th><td>{u}</td><td>{t}</td><td>{d}</td><td><a href={href}>{href}</a></td></tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card mb-3" id="f3" aria-labelledby="t-f3">
+    <h2 id="t-f3">Menú de accesibilidad (F3)</h2>
+    <p class="form-hint">Todas están en ♿ Menú de accesibilidad (<kbd>Alt+Shift+A</kbd>).</p>
+    <div class="table-scroll">
+      <table class="data-table">
+        <caption class="sr-only">Opciones del menú y criterio WCAG</caption>
+        <thead><tr><th scope="col">Categoría</th><th scope="col">Opción</th><th scope="col">WCAG 2.2</th></tr></thead>
+        <tbody>{F3.map(([c, o, w]) => <tr><td>{c}</td><td>{o}</td><td>{w}</td></tr>)}</tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card" id="f4" aria-labelledby="t-f4">
+    <h2 id="t-f4">Criterios de formularios (F4)</h2>
+    <div class="table-scroll">
+      <table class="data-table">
+        <caption class="sr-only">Criterios WCAG aplicados a los formularios</caption>
+        <thead><tr><th scope="col">Principio</th><th scope="col">Criterios</th><th scope="col">Cómo se aplica</th></tr></thead>
+        <tbody>{F4.map(([p, c, h]) => <tr><td>{p}</td><td>{c}</td><td>{h}</td></tr>)}</tbody>
+      </table>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .table-scroll { overflow-x: auto; }
+</style>

@@ -1,0 +1,166 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Solicitudes de interpretación" section="interprete" description="Solicitudes de interpretación y preparación con contexto mínimo (RF-19, RF-20).">
+  <section class="card mb-3">
+    <span class="badge badge-info mb-1">T2-U3 · RF-19 · T3-U3 · RF-20</span>
+    <h1 id="int-title">Mis solicitudes</h1>
+    <p id="int-status" class="form-hint" style="margin: 0;"></p>
+  </section>
+
+  <div class="dashboard-grid">
+    <section class="card" aria-labelledby="t-pend">
+      <h2 id="t-pend">📨 Pendientes de respuesta</h2>
+      <div id="pending" class="apt-list" aria-live="polite"></div>
+    </section>
+    <section class="card" aria-labelledby="t-acc">
+      <h2 id="t-acc">✅ Sesiones aceptadas</h2>
+      <div id="accepted" class="apt-list"></div>
+    </section>
+    <section class="card" id="prep" aria-labelledby="t-prep" tabindex="-1">
+      <h2 id="t-prep">📚 Preparar sesión</h2>
+      <p class="form-hint">Elige "Preparar" en una sesión aceptada. Solo verás la especialidad, el motivo general y un glosario.</p>
+    </section>
+    <section class="card" id="inbox"></section>
+  </div>
+
+  <dialog id="dlg-reject" class="ssb-dialog" aria-labelledby="dlg-reject-title">
+    <h2 id="dlg-reject-title">Rechazar solicitud</h2>
+    <form method="dialog" id="reject-form" novalidate>
+      <div class="form-group">
+        <label class="form-label" for="reject-reason">Motivo *</label>
+        <select id="reject-reason" class="form-control">
+          <option value="">Elige un motivo</option>
+          <option>No estoy disponible en ese horario</option>
+          <option>Tengo otra sesión a la misma hora</option>
+          <option>No conozco suficiente la especialidad</option>
+          <option>Otro motivo</option>
+        </select>
+        <span class="field-error" id="reject-error"></span>
+      </div>
+      <p class="form-hint">La solicitud vuelve al profesional para que asigne otro intérprete.</p>
+      <div class="flex-wrap" style="justify-content: space-between;">
+        <button type="button" class="btn btn-secondary" id="reject-cancel">Volver</button>
+        <button type="submit" class="btn btn-danger">Rechazar</button>
+      </div>
+    </form>
+  </dialog>
+</BaseLayout>
+
+<style is:global>
+  .glossary { display: grid; gap: 0.5rem; }
+  .glossary dt { font-weight: 800; }
+  .glossary dd { margin: 0 0 0.4rem; }
+</style>
+
+<script>
+  import { announce } from '../../lib/announce';
+  import { appointments } from '../../lib/data/appointments';
+  import { formatDate, isoDate, onDataChange } from '../../lib/data/db';
+  import { interpreters, isAccreditationValid, requestsOf, respondRequest } from '../../lib/data/interpreters';
+  import { professionals } from '../../lib/data/professionals';
+  import { esc } from '../../lib/forms';
+  import { glossaryFor } from '../../lib/glossary';
+  import { requireRole } from '../../lib/session';
+  import { mountInbox } from '../../lib/ui';
+
+  const session = requireRole('interprete');
+  if (session) {
+    const me = interpreters.get(session.userId)!;
+    const refreshInbox = mountInbox(document.getElementById('inbox')!, 'interprete', session.userId);
+    document.getElementById('int-status')!.innerHTML = isAccreditationValid(me)
+      ? `Acreditación ${esc(me.accreditationCode)} vigente hasta ${esc(formatDate(me.validUntil))}.`
+      : `<strong>⚠️ Tu acreditación venció el ${esc(formatDate(me.validUntil))}.</strong> <a href="/interprete/acreditacion">Actualízala</a> para recibir solicitudes.`;
+
+    // RF-20: solo especialidad, motivo general y glosario; sin nombre completo ni datos clínicos.
+    const card = (reqId: string, aptId: string, actions: string) => {
+      const a = appointments.get(aptId)!;
+      return `<article class="apt-card">
+        <div class="apt-time"><strong>${esc(a.time)}</strong><span>${a.durationMin} min</span></div>
+        <div class="apt-body">
+          <h3 class="apt-title">${esc(a.specialty)}</h3>
+          <p class="form-hint" style="margin: 0;">${esc(formatDate(a.date))} · con ${esc(professionals.get(a.professionalId)?.name ?? '')}</p>
+          <div class="flex-wrap mt-1" data-req="${reqId}">${actions}</div>
+        </div></article>`;
+    };
+
+    let rejecting = '';
+    const dlg = document.getElementById('dlg-reject') as HTMLDialogElement;
+
+    function render() {
+      const mine = requestsOf(session!.userId);
+      const today = isoDate(0);
+      const pending = mine.filter((r) => r.status === 'PENDIENTE');
+      const accepted = mine.filter((r) => r.status === 'ACEPTADA' && (appointments.get(r.appointmentId)?.date ?? '') >= today && appointments.get(r.appointmentId)?.status !== 'CANCELADA');
+      document.getElementById('pending')!.innerHTML =
+        pending
+          .map((r) =>
+            card(r.id, r.appointmentId, `<button type="button" class="btn btn-success" data-accept="${r.id}">✅ Aceptar</button>
+              <button type="button" class="btn btn-danger" data-reject="${r.id}">Rechazar</button>`)
+          )
+          .join('') || '<p class="form-hint">No tienes solicitudes pendientes.</p>';
+      document.getElementById('accepted')!.innerHTML =
+        accepted
+          .map((r) =>
+            card(r.id, r.appointmentId, `<button type="button" class="btn btn-secondary" data-prep="${r.appointmentId}">📚 Preparar</button>
+              ${appointments.get(r.appointmentId)!.date === today ? `<a class="btn btn-primary" href="/interprete/sesion?cita=${r.appointmentId}">🤟 Entrar a la sesión</a>` : ''}`)
+          )
+          .join('') || '<p class="form-hint">No tienes sesiones próximas.</p>';
+      refreshInbox();
+    }
+
+    function prepare(aptId: string) {
+      const a = appointments.get(aptId)!;
+      const prep = document.getElementById('prep')!;
+      prep.innerHTML = `<h2 id="t-prep">📚 Preparar sesión</h2>
+        <p><strong>Especialidad:</strong> ${esc(a.specialty)}<br><strong>Motivo general:</strong> ${esc(a.reason)}</p>
+        <p class="form-hint">Por confidencialidad no se muestran otros datos clínicos del paciente.</p>
+        <h3>Glosario de la especialidad</h3>
+        <dl class="glossary">${glossaryFor(a.specialty).map((t) => `<dt>${esc(t.term)}</dt><dd>${esc(t.plain)}<br><span class="form-hint">Glosa sugerida: <strong>${esc(t.gloss)}</strong></span></dd>`).join('')}</dl>`;
+      prep.focus();
+    }
+
+    document.querySelector('.dashboard-grid')!.addEventListener('click', (e) => {
+      const t = e.target as HTMLElement;
+      const accept = t.closest<HTMLButtonElement>('[data-accept]');
+      const reject = t.closest<HTMLButtonElement>('[data-reject]');
+      const prep = t.closest<HTMLButtonElement>('[data-prep]');
+      if (accept) {
+        const res = respondRequest(accept.dataset.accept!, true);
+        if (res.ok) announce('Solicitud aceptada. El profesional y el paciente verán tu confirmación.');
+        else {
+          announce(res.reason, 'assertive');
+          const slot = accept.closest('[data-req]')!;
+          slot.insertAdjacentHTML('afterend', `<p class="field-error visible" role="alert">⚠️ ${esc(res.reason)}</p>`);
+        }
+      }
+      if (reject) {
+        rejecting = reject.dataset.reject!;
+        (document.getElementById('reject-reason') as HTMLSelectElement).value = '';
+        dlg.showModal();
+      }
+      if (prep) prepare(prep.dataset.prep!);
+    });
+
+    document.getElementById('reject-cancel')!.addEventListener('click', () => dlg.close());
+    document.getElementById('reject-form')!.addEventListener('submit', (e) => {
+      const sel = document.getElementById('reject-reason') as HTMLSelectElement;
+      const err = document.getElementById('reject-error')!;
+      if (!sel.value) {
+        e.preventDefault();
+        sel.setAttribute('aria-invalid', 'true');
+        sel.setAttribute('aria-describedby', 'reject-error');
+        err.textContent = '⚠️ Elige un motivo para que el profesional sepa por qué.';
+        err.classList.add('visible');
+        sel.focus();
+        return;
+      }
+      respondRequest(rejecting, false, sel.value);
+      announce('Solicitud rechazada. Volvió al profesional.');
+    });
+
+    render();
+    onDataChange(render);
+  }
+</script>

@@ -3,17 +3,19 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
 <BaseLayout
-  title="Harness de IA No Conversacional y Firma Médica"
-  description="Demostración del Harness de IA No Conversacional para SaludSinBarreras: tareas cerradas, guardrails clínicos y aprobación obligatoria del profesional (RF-05, RF-07, RF-10)."
+  title="Laboratorio del agente IA"
+  description="Demostración del Harness de IA No Conversacional para SaludSinBarreras: tareas cerradas, guardrails clínicos y aprobación obligatoria del profesional (RF-05, RF-07, RF-14)."
 >
   <section class="card mb-3">
-    <span class="badge badge-warning mb-1">Componente IA No Conversacional · T4-U1 · T5-U2 · RF-05 · RF-07 · RF-10</span>
-    <h1>Harness de IA No Conversacional y Validación Clínica</h1>
+    <span class="badge badge-warning mb-1">Componente IA No Conversacional · T4-U1 · T7-U2 · RF-04 · RF-05 · RF-07 · RF-14</span>
+    <h1>Laboratorio del agente IA no conversacional</h1>
     <p>
-      Este componente <strong>no es un chatbot</strong>: ejecuta exclusivamente tareas clínicas acotadas
-      con entrada estructurada, salida JSON tipada, bloqueo de diagnóstico/prescripción autónoma y
-      <strong>retención obligatoria hasta que el profesional de salud firme el borrador</strong>.
+      Página técnica para la demostración. El agente <strong>no es un chatbot</strong>: ejecuta solo tareas
+      cerradas con entrada estructurada, bloquea diagnósticos o recetas autónomas y retiene todo borrador
+      <strong>hasta que el profesional lo firma</strong>. Por defecto usa el agente en Rust
+      (<code>npm run agente</code>); si está apagado, usa el motor local del navegador.
     </p>
+    <p class="form-hint">En el flujo real, estas tareas se usan en <a href="/profesional/consulta">Consulta</a> y <a href="/profesional/resumen">Resumen IA</a>.</p>
   </section>
 
   <!-- Panel de Configuración del Adaptador y Prueba Anti-Chat -->
@@ -29,6 +31,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       <div class="form-group" style="margin-bottom: 0;">
         <label class="form-label" for="ai-provider">Proveedor de IA</label>
         <select id="ai-provider" class="form-control">
+          <option value="rust-agente">Agente Rust no conversacional (backend/agente-ia · recomendado)</option>
           <option value="local-deterministic-fallback">Motor Determinista Local (Sin API Key — Demo offline/live)</option>
           <option value="gemini">Google Gemini (JSON Schema Single-Shot)</option>
           <option value="openai">OpenAI Compatible (JSON Object Single-Shot)</option>
@@ -58,7 +61,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   <div class="grid-2">
     <!-- EJECUTOR 1: Organizador de preguntas del paciente (T4-U1) -->
     <section class="card" aria-labelledby="titulo-ejecutor-1">
-      <span class="badge badge-info mb-1">Tarea T4-U1 · ORGANIZE_PATIENT_QUESTIONS</span>
+      <span class="badge badge-info mb-1">Tarea T4-U1 · RF-04 · ORGANIZE_PATIENT_QUESTIONS</span>
       <h2 id="titulo-ejecutor-1">1. Organizador de Preguntas del Paciente</h2>
       <p class="form-hint">
         Ayuda a personas con discapacidad cognitiva, auditiva o del habla a ordenar sus dudas antes
@@ -99,10 +102,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       <div id="questions-output-box" class="mt-2" aria-live="polite"></div>
     </section>
 
-    <!-- EJECUTOR 2: Resumen de indicaciones + Firma médica obligatoria (T5-U2 / RF-10 / RF-05 / RF-07) -->
+    <!-- EJECUTOR 2: Resumen de indicaciones + Firma médica obligatoria (T7-U2 / RF-14 / RF-05 / RF-07) -->
     <section class="card" aria-labelledby="titulo-ejecutor-2">
-      <span class="badge badge-warning mb-1">Tareas T5-U2 y T5-U1 · SUMMARIZE_MEDICAL_INDICATIONS</span>
-      <h2 id="titulo-ejecutor-2">2. Borrador de Indicaciones + Aprobación Médica (RF-10)</h2>
+      <span class="badge badge-warning mb-1">Tareas T7-U2 y T5-U1 · SUMMARIZE_MEDICAL_INDICATIONS</span>
+      <h2 id="titulo-ejecutor-2">2. Borrador de Indicaciones + Aprobación Médica (RF-14)</h2>
       <p class="form-hint">
         Convierte notas clínicas y transcripción en un borrador de Lectura Fácil con pictogramas.
         <strong>Permanece bloqueado hasta que el médico lo revise y firme.</strong>
@@ -162,9 +165,9 @@ Control de seguimiento en 15 días.</textarea>
 
     <div id="guardrail-report-box" class="mt-2"></div>
 
-    <!-- Paso de revisión y edición del médico (RF-10) -->
+    <!-- Paso de revisión y edición del médico (RF-14) -->
     <div class="card mt-2" style="background: var(--bg);">
-      <h3>Paso A: Revisión y Firma Digital del Profesional de Salud (RF-10)</h3>
+      <h3>Paso A: Revisión y Firma Digital del Profesional de Salud (RF-14)</h3>
       <div class="form-group mt-1">
         <label class="form-label" for="review-easyread-edit">
           Editar resumen en Lectura Fácil antes de aprobar:

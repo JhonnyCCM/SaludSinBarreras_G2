@@ -1,0 +1,19 @@
+[package]
+name = "agente-ia"
+version = "0.1.0"
+edition = "2021"
+description = "Agente de IA no conversacional de SaludSinBarreras: tareas cerradas, glosas de Lengua de Señas Ecuatoriana y lector de pantalla en tiempo real."
+license = "MIT"
+
+[dependencies]
+axum = { version = "0.8", features = ["ws"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync", "signal"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+regex = "1"
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+tower-http = { version = "0.6", features = ["cors"] }
+
+[profile.release]
+strip = true

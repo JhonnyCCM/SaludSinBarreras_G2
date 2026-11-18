@@ -1,0 +1,96 @@
+---
+// Aviso de expiración de sesión (F4 · WCAG 2.2.1 Tiempo ajustable).
+// 10 min de inactividad (20 min con "tiempo ampliado"); avisa 2 min antes y permite ampliar con una acción.
+// Para la demo: añade ?demo-sesion=1 a la URL o usa el botón de /ayuda (1 min, aviso a los 30 s).
+---
+
+<dialog id="session-timeout-dialog" class="ssb-dialog" aria-labelledby="session-timeout-title" aria-describedby="session-timeout-desc">
+  <h2 id="session-timeout-title">⏱️ Tu sesión está por expirar</h2>
+  <p id="session-timeout-desc">
+    Por seguridad, la sesión se cierra tras un tiempo sin actividad. Quedan
+    <strong><span id="session-timeout-count">2:00</span></strong>.
+    Lo que escribiste en los formularios se guarda y lo recuperarás al volver a entrar.
+  </p>
+  <div class="flex-wrap mt-2" style="justify-content: space-between;">
+    <button type="button" class="btn btn-secondary" id="session-timeout-logout">Cerrar sesión ahora</button>
+    <button type="button" class="btn btn-primary" id="session-timeout-extend">Ampliar tiempo</button>
+  </div>
+</dialog>
+
+<script>
+  import { announce } from '../lib/announce';
+  import { loadAccessibilityState } from '../lib/accessibility';
+  import { endSession, getSession } from '../lib/session';
+
+  const dialog = document.getElementById('session-timeout-dialog') as HTMLDialogElement;
+  const countEl = document.getElementById('session-timeout-count') as HTMLElement;
+
+  const demo = () =>
+    new URLSearchParams(location.search).has('demo-sesion') || sessionStorage.getItem('ssb_demo_timeout') === '1';
+
+  function limits() {
+    if (demo()) return { total: 60_000, warn: 30_000 };
+    const base = 10 * 60_000;
+    return { total: loadAccessibilityState().extendedTime ? base * 2 : base, warn: 2 * 60_000 };
+  }
+
+  let deadline = 0;
+  let ticker = 0;
+
+  function reset() {
+    deadline = Date.now() + limits().total;
+  }
+
+  function fmt(ms: number) {
+    const s = Math.max(0, Math.ceil(ms / 1000));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  }
+
+  function expire() {
+    dialog.close();
+    endSession();
+    const next = encodeURIComponent(location.pathname + location.search);
+    location.href = `/login?expirada=1&next=${next}`;
+  }
+
+  function tick() {
+    if (!getSession()) return;
+    const left = deadline - Date.now();
+    if (left <= 0) return expire();
+    if (left <= limits().warn && !dialog.open) {
+      dialog.showModal();
+      (document.getElementById('session-timeout-extend') as HTMLButtonElement).focus();
+      announce(`Tu sesión expira en ${fmt(left)}. Pulsa Ampliar tiempo para seguir.`, 'assertive');
+    }
+    if (dialog.open) countEl.textContent = fmt(left);
+  }
+
+  function extend() {
+    reset();
+    dialog.close();
+    announce('Tiempo ampliado. Puedes continuar.');
+  }
+
+  document.getElementById('session-timeout-extend')?.addEventListener('click', extend);
+  document.getElementById('session-timeout-logout')?.addEventListener('click', expire);
+  dialog.addEventListener('cancel', (e) => {
+    e.preventDefault();
+    extend();
+  });
+
+  ['keydown', 'pointerdown', 'input', 'scroll'].forEach((ev) =>
+    window.addEventListener(ev, () => {
+      if (!dialog.open) reset();
+    }, { passive: true })
+  );
+
+  window.addEventListener('ssb:demo-timeout', () => {
+    sessionStorage.setItem('ssb_demo_timeout', '1');
+    reset();
+    announce('Modo de prueba: el aviso de sesión aparecerá en 30 segundos.');
+  });
+
+  reset();
+  ticker = window.setInterval(tick, 1000);
+  window.addEventListener('pagehide', () => window.clearInterval(ticker));
+</script>

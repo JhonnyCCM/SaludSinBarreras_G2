@@ -1,0 +1,128 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { DAY_NAMES } from '../../lib/data/interpreters';
+---
+
+<BaseLayout title="Acreditación y disponibilidad" section="interprete" description="Registro de la acreditación LSEc con vencimiento y disponibilidad (RF-18, FORM-09).">
+  <section class="card mb-3">
+    <span class="badge badge-info mb-1">T1-U3 · RF-18 · FORM-09</span>
+    <h1>Mi acreditación y disponibilidad</h1>
+    <p id="acc-state" class="form-hint" style="margin: 0;"></p>
+  </section>
+
+  <div id="acc-errors" class="error-summary" tabindex="-1" hidden></div>
+
+  <form id="acc-form" class="card" novalidate>
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label" for="acc-name">Nombre completo *</label>
+        <input id="acc-name" class="form-control" autocomplete="name" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="acc-code">Código de acreditación LSEc *</label>
+        <input id="acc-code" class="form-control" aria-describedby="acc-code-hint" />
+        <span class="form-hint" id="acc-code-hint">Formato: CONADIS-LSEC-0000</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="acc-valid">Fecha de vencimiento *</label>
+        <input id="acc-valid" class="form-control" type="date" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="acc-file">Certificado (PDF o imagen, máx. 5 MB)</label>
+        <input id="acc-file" class="form-control" type="file" accept=".pdf,image/png,image/jpeg" />
+      </div>
+    </div>
+
+    <fieldset class="days">
+      <legend class="form-label">Días disponibles *</legend>
+      <div class="flex-wrap">
+        {DAY_NAMES.map((d, i) => (
+          <label class="radio-chip"><input type="checkbox" id={`day-${i}`} data-day={i} /> {d}</label>
+        ))}
+      </div>
+    </fieldset>
+    <div class="grid-2 mt-2">
+      <div class="form-group">
+        <label class="form-label" for="acc-from">Desde *</label>
+        <input id="acc-from" class="form-control" type="time" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="acc-to">Hasta *</label>
+        <input id="acc-to" class="form-control" type="time" />
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary">Revisar y guardar</button>
+  </form>
+</BaseLayout>
+
+<style>
+  .days { border: none; padding: 0; margin: 0; }
+</style>
+
+<script>
+  import { announce } from '../../lib/announce';
+  import { formatDate, toMinutes } from '../../lib/data/db';
+  import { DAY_NAMES, interpreters, isAccreditationValid } from '../../lib/data/interpreters';
+  import { rules, validateForm, valueOf } from '../../lib/forms';
+  import { confirmReview } from '../../lib/review';
+  import { requireRole } from '../../lib/session';
+
+  const session = requireRole('interprete');
+  if (session) {
+    const me = interpreters.get(session.userId)!;
+    const set = (id: string, v: string) => ((document.getElementById(id) as HTMLInputElement).value = v);
+    set('acc-name', me.fullName);
+    set('acc-code', me.accreditationCode);
+    set('acc-valid', me.validUntil);
+    set('acc-from', me.from);
+    set('acc-to', me.to);
+    me.days.forEach((d) => ((document.getElementById(`day-${d}`) as HTMLInputElement).checked = true));
+    const days = () => Array.from(document.querySelectorAll<HTMLInputElement>('[data-day]:checked')).map((c) => Number(c.dataset.day));
+    const state = () => {
+      const cur = interpreters.get(session.userId)!;
+      document.getElementById('acc-state')!.textContent = isAccreditationValid(cur)
+        ? `✅ Perfil verificado. Acreditación vigente hasta el ${formatDate(cur.validUntil)}.`
+        : `⚠️ Tu acreditación venció el ${formatDate(cur.validUntil)}. No recibirás solicitudes hasta actualizarla.`;
+    };
+    state();
+
+    const form = document.getElementById('acc-form') as HTMLFormElement;
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const file = (document.getElementById('acc-file') as HTMLInputElement).files?.[0];
+      const ok = validateForm(
+        form,
+        [
+          { id: 'acc-name', label: 'Nombre', check: rules.minLength(5, 'Escribe tu nombre completo.') },
+          { id: 'acc-code', label: 'Código', check: rules.pattern(/^CONADIS-LSEC-\d{4}$/i, 'Usa el formato CONADIS-LSEC-0000, como aparece en tu certificado.') },
+          { id: 'acc-valid', label: 'Vencimiento', check: rules.futureDate('La fecha de vencimiento debe ser posterior a hoy. Si venció, renueva tu acreditación.') },
+          { id: 'acc-file', label: 'Certificado', check: () => (!file ? null : file.size > 5 * 1024 * 1024 ? 'El archivo pesa más de 5 MB. Sube una versión más liviana.' : !/pdf|png|jpe?g/i.test(file.type) ? 'Sube un PDF, PNG o JPG.' : null) },
+          { id: 'day-1', label: 'Días disponibles', check: () => (days().length ? null : 'Marca al menos un día disponible.') },
+          { id: 'acc-to', label: 'Hasta', check: (v) => (toMinutes(v) - toMinutes(valueOf('acc-from')) >= 60 ? null : 'La hora final debe ser al menos 1 hora después de la inicial.') },
+        ],
+        document.getElementById('acc-errors')
+      );
+      if (!ok) return;
+      const confirmed = await confirmReview({
+        title: '¿Guardar tu acreditación?',
+        items: [
+          ['Código', valueOf('acc-code').toUpperCase()],
+          ['Vence', formatDate(valueOf('acc-valid'))],
+          ['Certificado', file?.name ?? 'Sin cambios'],
+          ['Disponibilidad', `${days().map((d) => DAY_NAMES[d]).join(', ')} · ${valueOf('acc-from')}–${valueOf('acc-to')}`],
+        ],
+      });
+      if (!confirmed) return;
+      interpreters.update(session.userId, {
+        fullName: valueOf('acc-name'),
+        accreditationCode: valueOf('acc-code').toUpperCase(),
+        validUntil: valueOf('acc-valid'),
+        days: days(),
+        from: valueOf('acc-from'),
+        to: valueOf('acc-to'),
+      });
+      state();
+      announce('Acreditación y disponibilidad guardadas.');
+    });
+  }
+</script>

@@ -69,7 +69,7 @@ export interface AnalyzeAccessibilityNeedsOutput {
   bandwidthRecommendation: string;
   appliedInterfacePreset: {
     fontScale: number;
-    contrast: 'standard' | 'high' | 'grayscale';
+    contrast: 'standard' | 'high';
     ttsAuto: boolean;
     easyRead: boolean;
     subtitlesDefault: boolean;

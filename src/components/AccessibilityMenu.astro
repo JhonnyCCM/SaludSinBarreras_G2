@@ -118,7 +118,6 @@
             <div class="flex-wrap mt-1" role="group" aria-label="Modos de contraste">
               <button type="button" class="btn btn-secondary" data-contrast-mode="standard">Estándar AA (4.5:1)</button>
               <button type="button" class="btn btn-secondary" data-contrast-mode="high">Alto Contraste (Negro/Amarillo)</button>
-              <button type="button" class="btn btn-secondary" data-contrast-mode="grayscale">Escala de Grises</button>
             </div>
           </div>
         </fieldset>
@@ -369,7 +368,6 @@
 
   function contrastLabel(mode: ContrastMode): string {
     if (mode === 'high') return 'Alto Contraste';
-    if (mode === 'grayscale') return 'Escala de Grises';
     return 'Estándar AA';
   }
 

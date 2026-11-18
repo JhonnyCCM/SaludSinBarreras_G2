@@ -148,7 +148,7 @@ function runDeterministicAccessibility(
         ? 'Conectividad media: habilitar video estándar adaptativo y respaldo de subtítulos sincrónicos.'
         : 'Conectividad alta: calidad HD habilitada para video de consulta e intérprete LSEc.';
 
-  const contrast: 'standard' | 'high' | 'grayscale' = input.communicationPreferences.highContrast
+  const contrast: 'standard' | 'high' = input.communicationPreferences.highContrast
     ? 'high'
     : 'standard';
 

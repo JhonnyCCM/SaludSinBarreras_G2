@@ -3,41 +3,88 @@
  * y utilidades de Texto a Voz (TTS) + Alertas Visuales/Vibratorias.
  */
 
-export type ContrastMode = 'standard' | 'high' | 'grayscale';
+export type ContrastMode = 'standard' | 'high';
+/** Interlineado: normal (1.55), medio (1.5× fuente) o amplio (2× fuente) — WCAG 1.4.12 */
+export type LineHeightMode = 'normal' | 'medium' | 'large';
 
+/**
+ * Las 15 opciones del menú F3 (más el tiempo ampliado que habilita el registro por discapacidad).
+ */
 export interface AccessibilityState {
+  /** 1.4.4 Tamaño de texto */
   fontScale: number;
+  /** 1.4.6 Modo de contraste */
   contrast: ContrastMode;
-  focusEnhanced: boolean;
+  /** 1.4.12 Interlineado */
+  lineHeight: LineHeightMode;
+  /** 1.4.12 Espaciado de letras, palabras y párrafos */
+  textSpacing: boolean;
+  /** 1.4.8 Fuente legible y ancho de lectura */
+  readableFont: boolean;
+  /** 1.1.1 Lectura en voz alta al enfocar */
   ttsFocusAuto: boolean;
+  /** 1.2.4 Subtítulos en vivo */
   subtitlesDefault: boolean;
+  /** 1.2.8 Transcripción */
+  showTranscript: boolean;
+  /** 1.2.6 Ventana del intérprete fijada y ampliada */
+  pinInterpreter: boolean;
+  /** 1.3.3 Alertas visuales y vibración */
   visualAlerts: boolean;
+  /** 2.1.1 / 2.1.4 Atajos de teclado Alt+Shift */
+  shortcutsEnabled: boolean;
+  /** 2.4.7 / 2.4.11 / 2.4.13 Foco reforzado */
+  focusEnhanced: boolean;
+  /** 2.5.5 Botones grandes (44 × 44 px) */
+  largeTargets: boolean;
+  /** 2.2.2 / 2.3.3 Detener animaciones */
+  reduceMotion: boolean;
+  /** 3.1.5 Lectura fácil */
   easyRead: boolean;
+  /** F4 2.2.1: tiempo ampliado en formularios (motriz / cognitiva) */
+  extendedTime: boolean;
 }
 
 export const DEFAULT_A11Y_STATE: AccessibilityState = {
   fontScale: 1,
   contrast: 'standard',
-  focusEnhanced: false,
+  lineHeight: 'normal',
+  textSpacing: false,
+  readableFont: false,
   ttsFocusAuto: false,
   subtitlesDefault: true,
+  showTranscript: false,
+  pinInterpreter: false,
   visualAlerts: true,
+  shortcutsEnabled: true,
+  focusEnhanced: false,
+  largeTargets: false,
+  reduceMotion: false,
   easyRead: false,
+  extendedTime: false,
 };
 
 const STORAGE_KEY = 'ssb_a11y_prefs_v1';
+
+function normalizeState(input: Partial<AccessibilityState> & { contrast?: string }): AccessibilityState {
+  const lineHeight: LineHeightMode =
+    input.lineHeight === 'medium' || input.lineHeight === 'large' ? input.lineHeight : 'normal';
+  return {
+    ...DEFAULT_A11Y_STATE,
+    ...input,
+    // Versiones anteriores guardaban 'grayscale'; el F3 solo define estándar y alto contraste.
+    contrast: input.contrast === 'high' ? 'high' : 'standard',
+    lineHeight,
+    fontScale: clampFontScale(input.fontScale ?? 1),
+  };
+}
 
 export function loadAccessibilityState(): AccessibilityState {
   if (typeof window === 'undefined') return { ...DEFAULT_A11Y_STATE };
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULT_A11Y_STATE };
-    const parsed = JSON.parse(raw) as Partial<AccessibilityState>;
-    return {
-      ...DEFAULT_A11Y_STATE,
-      ...parsed,
-      fontScale: clampFontScale(parsed.fontScale ?? 1),
-    };
+    return normalizeState(JSON.parse(raw) as Partial<AccessibilityState>);
   } catch {
     return { ...DEFAULT_A11Y_STATE };
   }
@@ -49,21 +96,34 @@ export function clampFontScale(scale: number): number {
   return Math.min(2, Math.max(1, Math.round(num * 100) / 100));
 }
 
-export function applyAccessibilityState(state: AccessibilityState): AccessibilityState {
-  const normalized: AccessibilityState = {
-    ...DEFAULT_A11Y_STATE,
-    ...state,
-    fontScale: clampFontScale(state.fontScale),
+/** Atributos de <html> que reflejan cada opción del menú; los lee global.css. */
+export function a11yRootAttributes(state: AccessibilityState): Record<string, string> {
+  const flag = (v: boolean) => (v ? 'true' : 'false');
+  return {
+    'data-contrast': state.contrast,
+    'data-focus': state.focusEnhanced ? 'enhanced' : 'standard',
+    'data-line-height': state.lineHeight,
+    'data-text-spacing': flag(state.textSpacing),
+    'data-readable-font': flag(state.readableFont),
+    'data-large-targets': flag(state.largeTargets),
+    'data-reduce-motion': flag(state.reduceMotion),
+    'data-easy-read': flag(state.easyRead),
+    'data-subtitles-default': flag(state.subtitlesDefault),
+    'data-show-transcript': flag(state.showTranscript),
+    'data-pin-interpreter': flag(state.pinInterpreter),
+    'data-visual-alerts': flag(state.visualAlerts),
   };
+}
+
+export function applyAccessibilityState(state: AccessibilityState): AccessibilityState {
+  const normalized = normalizeState(state);
 
   if (typeof document !== 'undefined') {
     const root = document.documentElement;
     root.style.setProperty('--a11y-font-scale', String(normalized.fontScale));
-    root.setAttribute('data-contrast', normalized.contrast);
-    root.setAttribute('data-focus', normalized.focusEnhanced ? 'enhanced' : 'standard');
-    root.setAttribute('data-easy-read', normalized.easyRead ? 'true' : 'false');
-    root.setAttribute('data-subtitles-default', normalized.subtitlesDefault ? 'true' : 'false');
-    root.setAttribute('data-visual-alerts', normalized.visualAlerts ? 'true' : 'false');
+    Object.entries(a11yRootAttributes(normalized)).forEach(([attr, value]) => {
+      root.setAttribute(attr, value);
+    });
   }
 
   if (typeof window !== 'undefined') {

@@ -28,12 +28,45 @@ const toggles = {
 ---
 
 <section class="a11y-wrapper" aria-label="Accesibilidad">
-  <div class="a11y-topbar">
-    <div class="container a11y-topbar-inner">
-      <p class="a11y-quick-info" id="a11y-summary-pill" aria-live="polite">
-        Texto <strong id="a11y-pill-scale">100%</strong> · <strong id="a11y-pill-contrast">Contraste estándar</strong>
-      </p>
-      <div class="a11y-quick-actions">
+  <!-- Aviso visual de alertas (F3 · 1.3.3); se anuncia también al lector de pantalla -->
+  <div id="ssb-visual-alert-banner" class="a11y-live-banner" role="status" aria-live="polite" hidden>
+    <span aria-hidden="true">🔔</span>
+    <span id="ssb-visual-alert-text"></span>
+    <button type="button" class="btn btn-secondary" id="ssb-close-alert-btn" aria-label="Cerrar aviso">Cerrar</button>
+  </div>
+
+  <!-- Burbuja flotante en esquina inferior derecha -->
+  <button
+    type="button"
+    class="btn btn-primary a11y-fab"
+    id="a11y-toggle-btn"
+    aria-expanded="false"
+    aria-controls="a11y-panel"
+    aria-label="Abrir menú de accesibilidad (Alt+Shift+A)"
+  >
+    <span class="a11y-fab-icon" aria-hidden="true">♿</span>
+    <span class="a11y-fab-label">Accesibilidad</span>
+  </button>
+
+  <div id="a11y-panel" class="a11y-panel" role="region" aria-labelledby="a11y-panel-title" hidden>
+    <div class="a11y-panel-inner">
+      <div class="a11y-panel-header">
+        <div>
+          <h2 class="a11y-panel-title" id="a11y-panel-title">Menú de accesibilidad</h2>
+          <p class="a11y-quick-info" id="a11y-summary-pill" aria-live="polite">
+            Texto <strong id="a11y-pill-scale">100%</strong> · <strong id="a11y-pill-contrast">Contraste estándar</strong>
+          </p>
+          <p class="form-hint" style="margin: 0.2rem 0 0;">
+            Se guarda en este dispositivo. <kbd>Esc</kbd> cierra.
+          </p>
+        </div>
+        <div class="flex-wrap">
+          <button type="button" class="btn btn-secondary" id="a11y-reset-btn">↺ Restablecer</button>
+          <button type="button" class="btn btn-primary" id="a11y-close-btn">✕ Cerrar</button>
+        </div>
+      </div>
+
+      <div class="a11y-quick-actions mb-2">
         <button type="button" class="btn btn-secondary a11y-compact-btn" id="a11y-quick-tts">
           🔊 Leer <span class="kbd-hint" data-shortcut-hint="read"></span>
         </button>
@@ -41,35 +74,6 @@ const toggles = {
         <button type="button" class="btn btn-secondary a11y-compact-btn" id="a11y-open-shortcuts">
           ⌨️ Atajos <span class="kbd-hint" data-shortcut-hint="help"></span>
         </button>
-        <button type="button" class="btn btn-primary" id="a11y-toggle-btn" aria-expanded="false" aria-controls="a11y-panel">
-          ♿ Menú de accesibilidad <span class="kbd-hint" data-shortcut-hint="menu"></span>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Aviso visual de alertas (F3 · 1.3.3); se anuncia también al lector de pantalla -->
-  <div class="container">
-    <div id="ssb-visual-alert-banner" class="a11y-live-banner" role="status" aria-live="polite" hidden>
-      <span aria-hidden="true">🔔</span>
-      <span id="ssb-visual-alert-text"></span>
-      <button type="button" class="btn btn-secondary" id="ssb-close-alert-btn" aria-label="Cerrar aviso">Cerrar</button>
-    </div>
-  </div>
-
-  <div id="a11y-panel" class="a11y-panel" role="region" aria-labelledby="a11y-panel-title" hidden>
-    <div class="container">
-      <div class="a11y-panel-header">
-        <div>
-          <h2 class="a11y-panel-title" id="a11y-panel-title">Menú de accesibilidad</h2>
-          <p class="form-hint" style="margin: 0;">
-            Tus ajustes se guardan en este dispositivo. <kbd>Esc</kbd> cierra el menú.
-          </p>
-        </div>
-        <div class="flex-wrap">
-          <button type="button" class="btn btn-secondary" id="a11y-reset-btn">↺ Restablecer ajustes</button>
-          <button type="button" class="btn btn-primary" id="a11y-close-btn">✕ Cerrar</button>
-        </div>
       </div>
 
       <div class="a11y-grid">
@@ -209,51 +213,65 @@ const toggles = {
 </section>
 
 <style>
-  .a11y-topbar {
-    background: var(--surface-alt);
-    border-bottom: 2px solid var(--border);
-    padding-block: 0.4rem;
+  .a11y-fab {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 1200;
+    border-radius: 999px;
+    padding: 0.7rem 1.1rem;
+    min-height: 52px;
+    min-width: 52px;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.25);
+    border: 2px solid var(--surface);
   }
-  .a11y-topbar-inner {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.6rem;
+  .a11y-fab-icon { font-size: 1.25rem; line-height: 1; }
+  @media (max-width: 520px) {
+    .a11y-fab { padding: 0.7rem; }
+    .a11y-fab-label { display: none; }
   }
+
   .a11y-quick-info { margin: 0; font-size: 0.9rem; }
   .a11y-quick-actions { display: flex; flex-wrap: wrap; gap: 0.45rem; }
-  .a11y-compact-btn { padding: 0.35rem 0.75rem; font-size: 0.92rem; }
+  .a11y-compact-btn { padding: 0.4rem 0.75rem; font-size: 0.9rem; }
   .kbd-hint { font-size: 0.75rem; font-weight: 600; opacity: 0.85; }
   .kbd-hint:empty { display: none; }
 
   .a11y-panel {
+    position: fixed;
+    right: 1rem;
+    bottom: 5rem;
+    z-index: 1200;
+    width: min(460px, calc(100vw - 2rem));
+    max-height: min(76vh, 680px);
+    overflow-y: auto;
     background: var(--surface);
-    border-bottom: 3px solid var(--primary);
-    padding-block: 1.25rem;
-    box-shadow: var(--shadow);
+    border: 3px solid var(--primary);
+    border-radius: 16px;
+    padding: 1rem;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.25);
   }
   .a11y-panel[hidden], .a11y-live-banner[hidden] { display: none; }
   .a11y-panel-header {
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 1rem;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
     padding-bottom: 0.75rem;
     border-bottom: 1px solid var(--border-subtle);
   }
-  .a11y-panel-title { font-size: 1.2rem; margin-bottom: 0.25rem; }
+  .a11y-panel-title { font-size: 1.15rem; margin-bottom: 0.2rem; }
   .a11y-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
-    gap: 1rem;
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
   }
   .a11y-fieldset {
     border: 2px solid var(--border-subtle);
     border-radius: var(--radius);
-    padding: 1rem;
+    padding: 0.85rem;
     background: var(--bg);
     margin: 0;
   }
@@ -262,18 +280,23 @@ const toggles = {
   .shortcut-edit-list li { display: grid; gap: 0.25rem; }
   .shortcut-input { width: 3.2rem; text-align: center; text-transform: uppercase; font-weight: 700; }
   .a11y-live-banner {
+    position: fixed;
+    left: 1rem;
+    bottom: 1rem;
+    z-index: 1190;
+    max-width: min(460px, calc(100vw - 6.5rem));
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    margin-top: 0.75rem;
     padding: 0.8rem 1rem;
     border-radius: var(--radius);
     border: 2px solid var(--warning-border);
     background: var(--warning-bg);
     color: var(--warning-text);
     font-weight: 700;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.2);
   }
   .btn[aria-pressed='true'] {
     background: var(--primary);

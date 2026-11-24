@@ -15,18 +15,46 @@ const disabilities: Array<{ value: DisabilityCategory; title: string; desc: stri
 
 <BaseLayout title="Registro de paciente" description="Registro de pacientes por tipo de discapacidad con apoyos que se habilitan automáticamente (RF-01, FORM-01).">
   <section class="card mb-3">
-    <span class="badge badge-info mb-1">T1-U1 · RF-01 · FORM-01</span>
+    <span class="badge badge-info mb-1 technical-only">T1-U1 · RF-01 · FORM-01</span>
     <h1>Crea tu cuenta de paciente</h1>
     <p>Indica tu tipo de discapacidad y activaremos los apoyos que te corresponden. Puedes cambiarlos antes de guardar.</p>
     <p class="form-hint">Los campos con * son obligatorios. Tu avance se guarda solo: si sales, lo recuperas al volver.</p>
+    <div class="mt-2">
+      <div class="flex-wrap" style="justify-content: space-between;">
+        <strong id="reg-progress-label">Paso 1 de 4</strong>
+        <span class="form-hint" id="reg-progress-pct">25 % completado</span>
+      </div>
+      <div
+        id="reg-progressbar"
+        class="progress-track mt-1"
+        role="progressbar"
+        aria-valuemin="1"
+        aria-valuemax="4"
+        aria-valuenow="1"
+        aria-labelledby="reg-progress-label"
+      >
+        <div id="reg-progress-fill" class="progress-fill" style="width: 25%;"></div>
+      </div>
+    </div>
     <ol class="step-pills" aria-label="Pasos del registro">
-      <li data-step-pill="1" class="active">1. Tus datos</li>
+      <li data-step-pill="1" class="active" aria-current="step">1. Tus datos</li>
       <li data-step-pill="2">2. Discapacidad y apoyos</li>
       <li data-step-pill="3">3. Avisos y contacto</li>
       <li data-step-pill="4">4. Revisar y aceptar</li>
     </ol>
   </section>
 
+  <div class="easy-read-only easy-read-box" aria-label="Guía sencilla del registro">
+    <strong>📖 Qué vas a hacer en esta pantalla:</strong>
+    <ol>
+      <li>Escribe tu nombre, cédula, fecha de nacimiento y celular.</li>
+      <li>Marca tu discapacidad para activar tus apoyos automáticos.</li>
+      <li>Elige cómo quieres recibir avisos de citas y medicinas.</li>
+      <li>Revisa todo y pulsa <em>Crear mi cuenta</em>.</li>
+    </ol>
+  </div>
+
+  <div id="reg-session-warning" class="alert-box warning mb-2" role="status" hidden></div>
   <div id="reg-errors" class="error-summary" tabindex="-1" hidden></div>
 
   <form id="reg-form" class="card" novalidate>
@@ -157,17 +185,19 @@ const disabilities: Array<{ value: DisabilityCategory; title: string; desc: stri
 </BaseLayout>
 
 <style>
+  .progress-track { width: 100%; height: 12px; border-radius: 999px; background: var(--surface-alt); border: 1px solid var(--border); overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--primary); transition: width 0.2s ease; }
   .step-pills { list-style: none; padding: 0; margin: 0.75rem 0 0; display: flex; flex-wrap: wrap; gap: 0.5rem; }
   .step-pills li { padding: 0.3rem 0.75rem; border-radius: 999px; font-weight: 700; font-size: 0.9rem; background: var(--surface-alt); border: 1px solid var(--border-subtle); }
   .step-pills li.active { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
   .wizard-step { border: none; padding: 0; margin: 0; }
-  .wizard-step[hidden], #reg-done[hidden], .support-group[hidden] { display: none; }
+  .wizard-step[hidden], #reg-done[hidden], .support-group[hidden], #reg-session-warning[hidden] { display: none; }
   .step-legend { font-size: 1.25rem; font-weight: 800; margin-bottom: 1rem; }
   .wizard-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.75rem; margin-top: 1.5rem; padding-top: 1rem; border-top: 2px solid var(--border-subtle); }
   .dis-list { display: grid; gap: 0.75rem; }
   .support-group { margin: 0.4rem 0 0 2.2rem; padding: 0.6rem 0.9rem; border: 2px solid var(--primary); border-radius: var(--radius); background: var(--surface-alt); display: grid; gap: 0.4rem; }
   .support-group legend { font-weight: 700; font-size: 0.9rem; padding-inline: 0.3rem; }
-  .support-option { display: flex; gap: 0.6rem; align-items: flex-start; cursor: pointer; }
+  .support-option { display: flex; gap: 0.6rem; align-items: center; min-height: 44px; padding: 0.35rem 0.25rem; cursor: pointer; }
   .plain-group { border: none; padding: 0; margin: 0; }
   .icon-badge { display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: 8px; background: var(--surface-alt); color: var(--primary); }
 </style>
@@ -179,9 +209,28 @@ const disabilities: Array<{ value: DisabilityCategory; title: string; desc: stri
   import type { ConnectivityLevel, DisabilityCategory } from '../../lib/ai-harness/types';
   import { autosaveForm, clearDraft } from '../../lib/autosave';
   import { esc, isChecked, rules, validateForm, valueOf, type FieldRule } from '../../lib/forms';
-  import { startSession } from '../../lib/session';
+  import { ROLE_LABELS, getSession, startSession } from '../../lib/session';
   import { DISABILITY_LABELS, addPatient, getPatients } from '../../lib/store';
   import { SUPPORTS, a11yPatchFromSupports, preferencesFromSupports, type SupportKey } from '../../lib/supports';
+
+  const existingSession = getSession();
+  const sessionWarning = document.getElementById('reg-session-warning') as HTMLElement;
+  if (existingSession) {
+    sessionWarning.hidden = false;
+    sessionWarning.textContent = `Aviso: actualmente iniciaste sesión como ${existingSession.name} (${ROLE_LABELS[existingSession.role]}). Al crear esta cuenta, la sesión cambiará automáticamente al nuevo paciente.`;
+  }
+
+  function normalizeDigits(value: string): string {
+    return value.replace(/\D+/g, '');
+  }
+
+  function normalizeEcuadorPhone(value: string): string {
+    const digits = normalizeDigits(value);
+    if (digits.startsWith('593') && digits.length >= 11) {
+      return `0${digits.slice(3)}`;
+    }
+    return digits;
+  }
 
   const form = document.getElementById('reg-form') as HTMLFormElement;
   const summary = document.getElementById('reg-errors') as HTMLElement;
@@ -231,15 +280,25 @@ const disabilities: Array<{ value: DisabilityCategory; title: string; desc: stri
       {
         id: 'reg-cedula',
         label: 'Cédula',
-        check: (v) =>
-          !/^\d{10}$/.test(v) ? 'Escribe los 10 números de tu cédula, sin guiones.' : getPatients().some((p) => p.cedula === v) ? 'Ya existe una cuenta con esta cédula. Inicia sesión en su lugar.' : null,
+        check: (v) => {
+          const clean = normalizeDigits(v);
+          return !/^\d{10}$/.test(clean)
+            ? 'Escribe los 10 números de tu cédula (ej. 1312345678).'
+            : getPatients().some((p) => p.cedula === clean)
+              ? 'Ya existe una cuenta con esta cédula. Inicia sesión en su lugar.'
+              : null;
+        },
       },
       {
         id: 'reg-birth',
         label: 'Fecha de nacimiento',
         check: (v) => (!v ? 'Elige tu fecha de nacimiento.' : ageFrom(v) < 0 || ageFrom(v) > 120 ? 'Revisa el año: la fecha no parece correcta.' : null),
       },
-      { id: 'reg-phone', label: 'Celular', check: rules.pattern(/^0\d{9}$/, 'Escribe 10 números empezando por 0. Ejemplo: 0991234567') },
+      {
+        id: 'reg-phone',
+        label: 'Celular',
+        check: (v) => (/^0\d{9}$/.test(normalizeEcuadorPhone(v)) ? null : 'Escribe 10 números empezando por 0 (puedes usar espacios o +593). Ejemplo: 0991234567'),
+      },
     ],
     2: [
       { id: 'dis-visual', label: 'Tipo de discapacidad', check: () => (selectedDisabilities().length ? null : 'Marca al menos un tipo de discapacidad para activar tus apoyos.') },
@@ -252,8 +311,8 @@ const disabilities: Array<{ value: DisabilityCategory; title: string; desc: stri
     const sup = selectedSupports();
     const items: Array<[string, string]> = [
       ['Nombre', valueOf('reg-name')],
-      ['Cédula (usuario)', valueOf('reg-cedula')],
-      ['Celular', valueOf('reg-phone')],
+      ['Cédula (usuario)', normalizeDigits(valueOf('reg-cedula'))],
+      ['Celular', normalizeEcuadorPhone(valueOf('reg-phone'))],
       ['Discapacidad', selectedDisabilities().map((d) => DISABILITY_LABELS[d]).join(', ')],
       ['Apoyos activados', sup.map((k) => SUPPORTS[k].label).join(', ') || 'Ninguno'],
       ['Recordatorios', ['rem-visual', 'rem-vibration', 'rem-audio', 'rem-sms'].filter(isChecked).map((id) => ({ 'rem-visual': 'pantalla', 'rem-vibration': 'vibración', 'rem-audio': 'sonido', 'rem-sms': 'mensaje de texto' })[id]).join(', ') || 'Ninguno'],
@@ -271,6 +330,15 @@ const disabilities: Array<{ value: DisabilityCategory; title: string; desc: stri
       if (active) p.setAttribute('aria-current', 'step');
       else p.removeAttribute('aria-current');
     });
+    const pct = step * 25;
+    const pb = document.getElementById('reg-progressbar');
+    const fill = document.getElementById('reg-progress-fill');
+    const lbl = document.getElementById('reg-progress-label');
+    const pctLbl = document.getElementById('reg-progress-pct');
+    if (pb) pb.setAttribute('aria-valuenow', String(step));
+    if (fill) fill.style.width = `${pct}%`;
+    if (lbl) lbl.textContent = `Paso ${step} de 4`;
+    if (pctLbl) pctLbl.textContent = `${pct} % completado`;
     prev.hidden = step === 1;
     next.hidden = step === 4;
     submit.hidden = step !== 4;
@@ -310,9 +378,9 @@ const disabilities: Array<{ value: DisabilityCategory; title: string; desc: stri
       addPatient({
         id,
         fullName,
-        cedula: valueOf('reg-cedula'),
+        cedula: normalizeDigits(valueOf('reg-cedula')),
         age: ageFrom(valueOf('reg-birth')),
-        phone: valueOf('reg-phone'),
+        phone: normalizeEcuadorPhone(valueOf('reg-phone')),
         email: valueOf('reg-email') || undefined,
         supportContact: supportName ? `${supportName} - ${valueOf('reg-support-phone')}` : 'No registrado',
         connectivity: valueOf('reg-connectivity') as ConnectivityLevel,

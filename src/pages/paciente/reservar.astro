@@ -25,8 +25,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     </fieldset>
 
     <fieldset class="choice-group mt-2">
-      <legend class="form-label">3. Hora *</legend>
+      <legend class="form-label" id="book-slot-legend">3. Hora *</legend>
       <div id="book-slots" class="choice-grid"></div>
+      <p id="slot-status" class="form-hint mt-1" role="status" aria-live="polite"></p>
     </fieldset>
 
     <div class="form-group mt-2">
@@ -55,6 +56,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
 <script>
   import { triggerVisualAlert } from '../../lib/accessibility';
+  import { announce } from '../../lib/announce';
   import { availableSlots, bookAppointment, bookableDates } from '../../lib/data/appointments';
   import { formatDate } from '../../lib/data/db';
   import { CONSULT_TYPE_LABELS, professionals, type ConsultType } from '../../lib/data/professionals';
@@ -81,6 +83,10 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
     function renderNote() {
       const prof = professionals.get(profSel.value)!;
+      const slotLegend = document.getElementById('book-slot-legend');
+      if (slotLegend) {
+        slotLegend.textContent = `3. Hora * (duración: ${prof.durations[type]} min)`;
+      }
       document.getElementById('book-type-note')!.innerHTML =
         `<strong>Tipo de consulta: ${esc(CONSULT_TYPE_LABELS[type])} (${prof.durations[type]} min).</strong> ` +
         (type === 'interprete'
@@ -103,11 +109,23 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       const slots = date ? availableSlots(profSel.value, date, type) : [];
       const current = selected('book-slot');
       const box = document.getElementById('book-slots')!;
+      const statusEl = document.getElementById('slot-status');
       box.setAttribute('role', 'radiogroup');
       box.setAttribute('aria-label', date ? `Horas libres el ${formatDate(date)}` : 'Horas libres');
       box.innerHTML = slots.length
         ? slots.map((s) => radio('book-slot', s, s, current === s)).join('')
         : '<p class="form-hint">Elige primero un día.</p>';
+      if (statusEl) {
+        if (!date) {
+          statusEl.textContent = '';
+        } else if (current && !slots.includes(current)) {
+          const msg = `La hora anterior (${current}) no está libre este día. Elige una nueva hora entre las ${slots.length} disponibles.`;
+          statusEl.textContent = msg;
+          announce(msg);
+        } else {
+          statusEl.textContent = `${slots.length} hora${slots.length === 1 ? '' : 's'} disponible${slots.length === 1 ? '' : 's'} para el ${formatDate(date)}.`;
+        }
+      }
     }
 
     profSel.addEventListener('change', () => {

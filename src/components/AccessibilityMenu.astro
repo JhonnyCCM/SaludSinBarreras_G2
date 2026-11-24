@@ -7,7 +7,7 @@ const toggles = {
   visual: [
     { key: 'textSpacing', title: 'Espaciado de texto', desc: 'Más espacio entre letras, palabras y párrafos.', wcag: '1.4.12 AA' },
     { key: 'readableFont', title: 'Fuente legible', desc: 'Fuente sin serifa, texto a la izquierda y líneas de 80 caracteres.', wcag: '1.4.8 AAA' },
-    { key: 'ttsFocusAuto', title: 'Leer el campo al enfocarlo', desc: 'Lee en voz alta la etiqueta de cada campo al moverte con Tab.', wcag: '1.1.1 A' },
+    { key: 'ttsFocusAuto', title: 'Leer el campo al enfocarlo', desc: 'Lee en voz alta la etiqueta de cada campo al moverte con Tab. Desactívalo si ya usas un lector de pantalla externo (NVDA, VoiceOver o TalkBack).', wcag: '1.1.1 A' },
   ],
   auditiva: [
     { key: 'subtitlesDefault', title: 'Subtítulos en vivo', desc: 'Subtítulos activos en la videoconsulta.', wcag: '1.2.4 AA' },
@@ -288,6 +288,7 @@ const toggles = {
     applyAccessibilityState,
     clampFontScale,
     loadAccessibilityState,
+    speakLongText,
     speakText,
     stopSpeaking,
     triggerVisualAlert,
@@ -375,8 +376,8 @@ const toggles = {
       const label = active.id ? document.querySelector(`label[for="${CSS.escape(active.id)}"]`)?.textContent : '';
       text = `${label || active.getAttribute('aria-label') || ''}. ${(active as HTMLInputElement).value || ''}`;
     }
-    if (!text) text = (document.getElementById('contenido-principal')?.innerText || '').slice(0, 2500);
-    if (!speakText(text)) triggerVisualAlert('Tu navegador no tiene síntesis de voz disponible.');
+    if (!text) text = document.getElementById('contenido-principal')?.innerText || '';
+    if (!speakLongText(text)) triggerVisualAlert('Tu navegador no tiene síntesis de voz disponible.');
   }
 
   function resetAll() {
@@ -463,10 +464,13 @@ const toggles = {
     triggerVisualAlert('Alerta de prueba: así se avisan las llamadas y recordatorios sin depender del sonido.')
   );
 
-  // Opción "Leer el campo al enfocarlo"
+  // Opción "Leer el campo al enfocarlo" con retardo de 180 ms para evitar cortes al tabular rápido
+  let focusSpeakTimer = 0;
   document.addEventListener('focusin', (event) => {
+    window.clearTimeout(focusSpeakTimer);
     if (!state.ttsFocusAuto) return;
-    const target = event.target as HTMLElement;
+    const target = event.target as HTMLElement | null;
+    if (!target || target === document.body || target.id === 'contenido-principal') return;
     const id = target.getAttribute('id');
     const text =
       target.getAttribute('aria-label') ||
@@ -474,11 +478,16 @@ const toggles = {
       target.closest('label')?.textContent ||
       target.textContent ||
       '';
-    if (text.trim()) speakText(text.trim().slice(0, 180));
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    focusSpeakTimer = window.setTimeout(() => {
+      speakText(trimmed.slice(0, 180));
+    }, 180);
   });
 
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
+      window.clearTimeout(focusSpeakTimer);
       stopSpeaking();
       if (!panel.hidden) {
         event.preventDefault();

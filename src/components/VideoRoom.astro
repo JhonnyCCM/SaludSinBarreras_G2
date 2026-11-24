@@ -58,13 +58,13 @@ const { role } = Astro.props;
     <div class="room-layout">
       <div class="stage">
         <div class="tiles" id="tiles"></div>
-        <div class="subtitle-bar" id="subtitle-bar" aria-hidden="true"><span id="subtitle-text">Los subtítulos aparecerán aquí.</span></div>
+        <div class="subtitle-bar" id="subtitle-bar" role="region" aria-label="Subtítulo en vivo actual"><span id="subtitle-text">Los subtítulos aparecerán aquí.</span></div>
       </div>
 
       <aside class="side">
         <section class="side-panel" aria-labelledby="signs-title">
           <h3 id="signs-title">🤟 Señas (glosas LSEc)</h3>
-          <div id="sign-current" class="sign-current" aria-hidden="true">—</div>
+          <div id="sign-current" class="sign-current" role="region" aria-label="Glosa de seña actual">—</div>
           <ol id="sign-strip" class="sign-strip" aria-label="Glosas de la última frase"></ol>
           <p id="sign-expression" class="form-hint"></p>
           <p id="sign-meta" class="form-hint"></p>
@@ -79,6 +79,7 @@ const { role } = Astro.props;
           <h3 id="participants-title">👥 Participantes</h3>
           <ul id="participants" class="participants"></ul>
           <button type="button" class="btn btn-secondary" id="btn-simulate-others">Simular que los demás se conectan</button>
+          <p class="form-hint" style="margin: 0.4rem 0 0;">En este prototipo el video remoto es local: puedes abrir los otros roles en otra pestaña o simular su conexión aquí.</p>
         </section>
       </aside>
     </div>
@@ -110,14 +111,42 @@ const { role } = Astro.props;
 
 <style is:global>
   /* Global: las piezas de la sala se crean con JavaScript y no reciben el alcance de Astro */
+  .video-room {
+    --room-preview-bg: #0f172a;
+    --room-preview-text: #e2e8f0;
+    --room-tile-bg: #1e293b;
+    --room-tile-text: #f8fafc;
+    --room-tile-label-bg: rgba(15, 23, 42, 0.85);
+    --room-sub-bg: #000000;
+    --room-sub-text: #ffffff;
+    --room-sub-border: var(--border-subtle);
+    --room-guide-color: #facc15;
+    --room-speaking-border: #22c55e;
+    --room-turn-border: #facc15;
+    --room-pinned-border: #38bdf8;
+  }
+  html[data-contrast="high"] .video-room {
+    --room-preview-bg: #000000;
+    --room-preview-text: #ffff00;
+    --room-tile-bg: #000000;
+    --room-tile-text: #ffffff;
+    --room-tile-label-bg: #000000;
+    --room-sub-bg: #000000;
+    --room-sub-text: #ffff00;
+    --room-sub-border: #00ffff;
+    --room-guide-color: #00ffff;
+    --room-speaking-border: #00ff00;
+    --room-turn-border: #ffff00;
+    --room-pinned-border: #00ffff;
+  }
   .video-room [hidden] { display: none !important; }
   .precheck-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
-  .preview-box { position: relative; background: #0f172a; border-radius: var(--radius); aspect-ratio: 16 / 10; overflow: hidden; display: grid; place-items: center; }
+  .preview-box { position: relative; background: var(--room-preview-bg); border: 2px solid var(--border-subtle); border-radius: var(--radius); aspect-ratio: 16 / 10; overflow: hidden; display: grid; place-items: center; }
   .preview-box video { width: 100%; height: 100%; object-fit: cover; }
-  .preview-placeholder { position: absolute; color: #e2e8f0; text-align: center; padding: 1rem; margin: 0; }
-  .framing-guide { position: absolute; inset: 8% 22%; border: 3px dashed #facc15; border-radius: 40% 40% 12px 12px; }
-  .guide-head { position: absolute; top: 6%; left: 50%; width: 30%; aspect-ratio: 1; transform: translateX(-50%); border: 3px dashed #facc15; border-radius: 50%; }
-  .guide-torso { position: absolute; bottom: 0; left: 12%; right: 12%; height: 45%; border-top: 3px dashed #facc15; }
+  .preview-placeholder { position: absolute; color: var(--room-preview-text); text-align: center; padding: 1rem; margin: 0; }
+  .framing-guide { position: absolute; inset: 8% 22%; border: 3px dashed var(--room-guide-color); border-radius: 40% 40% 12px 12px; }
+  .guide-head { position: absolute; top: 6%; left: 50%; width: 30%; aspect-ratio: 1; transform: translateX(-50%); border: 3px dashed var(--room-guide-color); border-radius: 50%; }
+  .guide-torso { position: absolute; bottom: 0; left: 12%; right: 12%; height: 45%; border-top: 3px dashed var(--room-guide-color); }
   .check-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; font-weight: 600; }
   .mic-meter { height: 10px; background: var(--surface-alt); border-radius: 999px; overflow: hidden; margin-top: 0.75rem; border: 1px solid var(--border-subtle); }
   .mic-meter span { display: block; height: 100%; width: 0; background: var(--success-border); transition: width 0.1s linear; }
@@ -127,17 +156,17 @@ const { role } = Astro.props;
   @media (max-width: 900px) { .room-layout { grid-template-columns: 1fr; } }
   .stage { display: grid; gap: 0.5rem; }
   .tiles { display: grid; gap: 0.6rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
-  .tile { position: relative; background: #1e293b; color: #f8fafc; border-radius: var(--radius); min-height: 170px; display: grid; place-items: center; overflow: hidden; border: 3px solid transparent; }
+  .tile { position: relative; background: var(--room-tile-bg); color: var(--room-tile-text); border-radius: var(--radius); min-height: 170px; display: grid; place-items: center; overflow: hidden; border: 3px solid var(--border-subtle); }
   .tile video { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; }
   .tile .tile-avatar { font-size: 2.6rem; }
-  .tile .tile-label { position: absolute; left: 0.5rem; bottom: 0.5rem; background: rgba(15, 23, 42, 0.85); padding: 0.2rem 0.55rem; border-radius: 6px; font-weight: 700; font-size: 0.9rem; }
-  .tile.speaking { border-color: #22c55e; }
-  .tile.has-turn { border-color: #facc15; }
+  .tile .tile-label { position: absolute; left: 0.5rem; bottom: 0.5rem; background: var(--room-tile-label-bg); color: var(--room-tile-text); border: 1px solid var(--border-subtle); padding: 0.2rem 0.55rem; border-radius: 6px; font-weight: 700; font-size: 0.9rem; }
+  .tile.speaking { border-color: var(--room-speaking-border); }
+  .tile.has-turn { border-color: var(--room-turn-border); }
   .tile.audio-only video { display: none; }
   /* Ventana del intérprete fija y grande (F3 · WCAG 1.2.6): ocupa la fila completa, sin tapar otros elementos (2.4.11) */
   html[data-pin-interpreter='true'] .tile.interpreter-tile,
-  .tile.interpreter-tile.pinned { order: -1; grid-column: 1 / -1; min-height: 300px; border-color: #38bdf8; }
-  .subtitle-bar { background: #000; color: #fff; font-size: 1.25rem; font-weight: 700; padding: 0.6rem 0.9rem; border-radius: var(--radius); min-height: 3rem; }
+  .tile.interpreter-tile.pinned { order: -1; grid-column: 1 / -1; min-height: 300px; border-color: var(--room-pinned-border); }
+  .subtitle-bar { background: var(--room-sub-bg); color: var(--room-sub-text); border: 2px solid var(--room-sub-border); font-size: 1.25rem; font-weight: 700; padding: 0.6rem 0.9rem; border-radius: var(--radius); min-height: 3rem; }
   .subtitle-bar.off { display: none; }
   .side { display: grid; gap: 0.75rem; align-content: start; }
   .side-panel { background: var(--surface); border: 2px solid var(--border-subtle); border-radius: var(--radius); padding: 0.75rem; }

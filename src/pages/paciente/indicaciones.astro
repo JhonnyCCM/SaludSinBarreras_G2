@@ -4,9 +4,17 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
 <BaseLayout title="Mis indicaciones" section="paciente" description="Resumen de indicaciones firmado por el profesional en texto claro, audio y pictogramas (RF-05).">
   <section class="card mb-3">
-    <span class="badge badge-info mb-1">T5-U1 · RF-05</span>
+    <span class="badge badge-info mb-1 technical-only">T5-U1 · RF-05</span>
     <h1>Mis indicaciones</h1>
     <p class="form-hint" style="margin: 0;">Solo ves resúmenes revisados y firmados por tu médico. No son un diagnóstico automático.</p>
+  </section>
+  <section class="easy-read-only easy-read-box" aria-label="Guía fácil para leer tus indicaciones">
+    <strong>📖 Cómo leer tus indicaciones paso a paso:</strong>
+    <ul>
+      <li>💊 <strong>Medicamentos:</strong> Mira el dibujo, cuánto tomar y a qué hora hacerlo.</li>
+      <li>🔊 <strong>Escuchar:</strong> Pulsa <em>Escuchar indicaciones</em> si prefieres oírlas en voz alta.</li>
+      <li>⚠️ <strong>Urgencias:</strong> Si sientes alguna señal de la caja roja, busca atención médica enseguida.</li>
+    </ul>
   </section>
   <div id="summaries"></div>
 </BaseLayout>

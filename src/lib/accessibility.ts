@@ -160,6 +160,59 @@ export function speakText(text: string): boolean {
   }
 }
 
+/**
+ * Divide textos largos en fragmentos por línea/oración (máximo ~260 caracteres)
+ * para evitar truncados o cortes de Web Speech API en páginas extensas.
+ */
+export function speakLongText(text: string): boolean {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    return false;
+  }
+  const normalized = text.replace(/[ \t]+/g, ' ').replace(/\n{2,}/g, '\n').trim();
+  if (!normalized) return false;
+
+  const chunks: string[] = [];
+  for (const line of normalized.split('\n')) {
+    const cleanLine = line.trim();
+    if (!cleanLine) continue;
+    if (cleanLine.length <= 260) {
+      chunks.push(cleanLine);
+      continue;
+    }
+    const sentences = cleanLine.split(/(?<=[.!?])\s+/);
+    let buffer = '';
+    for (const sentence of sentences) {
+      const part = sentence.trim();
+      if (!part) continue;
+      if (!buffer) {
+        buffer = part;
+      } else if (buffer.length + 1 + part.length <= 260) {
+        buffer += ` ${part}`;
+      } else {
+        chunks.push(buffer);
+        buffer = part;
+      }
+    }
+    if (buffer) chunks.push(buffer);
+  }
+
+  if (chunks.length === 0) return false;
+
+  try {
+    window.speechSynthesis.cancel();
+    for (const chunk of chunks) {
+      const utterance = new SpeechSynthesisUtterance(chunk);
+      utterance.lang = 'es-EC';
+      utterance.rate = 0.96;
+      utterance.pitch = 1;
+      window.speechSynthesis.speak(utterance);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function stopSpeaking(): void {
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
     window.speechSynthesis.cancel();
